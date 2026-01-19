@@ -1,0 +1,76 @@
+"use client"
+
+import { useState } from "react"
+import { AppProvider } from "@/components/app-provider"
+import { AppSidebar, type NavPage } from "@/components/app-sidebar"
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
+import { Separator } from "@/components/ui/separator"
+import { DashboardPage } from "@/components/pages/dashboard-page"
+import { CalendarPage } from "@/components/pages/calendar-page"
+import { RoutinePage } from "@/components/pages/routine-page"
+import { MissionsPage } from "@/components/pages/missions-page"
+import { ProjectsPage } from "@/components/pages/projects-page"
+import { StatisticsPage } from "@/components/pages/statistics-page"
+import { SettingsPage } from "@/components/pages/settings-page"
+
+function DashboardLayout() {
+  const [currentPage, setCurrentPage] = useState<NavPage>("dashboard")
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case "dashboard":
+        return <DashboardPage onNavigate={setCurrentPage} />
+      case "calendar":
+        return <CalendarPage />
+      case "routine":
+        return <RoutinePage />
+      case "missions":
+        return <MissionsPage />
+      case "projects":
+        return <ProjectsPage />
+      case "statistics":
+        return <StatisticsPage />
+      case "settings":
+        return <SettingsPage />
+      default:
+        return <DashboardPage onNavigate={setCurrentPage} />
+    }
+  }
+
+  const getPageTitle = () => {
+    const titles: Record<NavPage, string> = {
+      dashboard: "Tableau de bord",
+      calendar: "Calendrier",
+      routine: "Routine matinale",
+      missions: "Missions",
+      projects: "Projets",
+      statistics: "Statistiques",
+      settings: "Paramètres",
+    }
+    return titles[currentPage]
+  }
+
+  return (
+    <SidebarProvider>
+      <AppSidebar currentPage={currentPage} onNavigate={setCurrentPage} />
+      <SidebarInset>
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 h-4" />
+          <h1 className="font-semibold">{getPageTitle()}</h1>
+        </header>
+        <main className="flex-1 overflow-auto p-4 md:p-6">
+          {renderPage()}
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
+  )
+}
+
+export default function Page() {
+  return (
+    <AppProvider>
+      <DashboardLayout />
+    </AppProvider>
+  )
+}
