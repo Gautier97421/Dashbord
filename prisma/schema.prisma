@@ -7,7 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = "postgresql://postgres:postgres@127.0.0.1:5432/dashboard_db"
+  url      = "postgresql://user:password@localhost:5432/dashboard_db"
 }
 
 enum Priority {
@@ -56,6 +56,68 @@ enum Theme {
   system
 }
 
+enum ActivityType {
+  gym
+  running
+  climbing
+  other
+}
+
+enum FitnessGoal {
+  weight_loss
+  muscle_gain
+  maintenance
+}
+
+enum WorkoutIntensity {
+  light
+  moderate
+  intense
+}
+
+enum ActivityLevel {
+  sedentary
+  light
+  moderate
+  active
+  very_active
+}
+
+enum Gender {
+  male
+  female
+  other
+}
+
+enum WidgetType {
+  routine_progress
+  missions_stats
+  tasks_stats
+  projects_stats
+  routine_list
+  today_missions
+  week_missions
+  active_projects
+  sleep_summary
+  sleep_bedtime_cycles
+  sleep_quality_avg
+  sleep_duration_avg
+  sleep_last_night
+  night_routine_progress
+  night_routine_list
+  workout_summary
+  workout_week_count
+  workout_last_session
+  workout_calories
+  nutrition_daily
+  nutrition_macros
+  routine_streak
+  mission_priority_high
+  tasks_today
+  tasks_urgent
+  project_progress
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -65,27 +127,36 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  routineActions RoutineAction[]
-  routineLogs    RoutineLog[]
-  tasks          Task[]
-  missions       Mission[]
-  projects       Project[]
-  calendarEvents CalendarEvent[]
-  dailyInsights  DailyInsight[]
-  settings       UserSettings?
+  routineActions      RoutineAction[]
+  routineLogs         RoutineLog[]
+  nightRoutineActions NightRoutineAction[]
+  nightRoutineLogs    NightRoutineLog[]
+  tasks               Task[]
+  missions            Mission[]
+  projects            Project[]
+  calendarEvents      CalendarEvent[]
+  dailyInsights       DailyInsight[]
+  sleepLogs           SleepLog[]
+  workoutSessions     WorkoutSession[]
+  workoutPrograms     WorkoutProgram[]
+  personalRecords     PersonalRecord[]
+  dailyNutrition      DailyNutrition[]
+  dashboardWidgets    DashboardWidget[]
+  fitnessProfile      FitnessProfile?
+  settings            UserSettings?
 
   @@map("users")
 }
 
 model UserSettings {
-  id              String  @id @default(cuid())
-  userId          String  @unique
-  theme           Theme   @default(system)
-  dayStartHour    Int     @default(6)
-  dayEndHour      Int     @default(22)
-  showRoutines    Boolean @default(true)
-  showStats       Boolean @default(true)
-  showDailyInsight Boolean @default(true)
+  id                String  @id @default(cuid())
+  userId            String  @unique
+  theme             Theme   @default(system)
+  dayStartHour      Int     @default(6)
+  dayEndHour        Int     @default(22)
+  showRoutines      Boolean @default(true)
+  showStats         Boolean @default(true)
+  showDailyInsight  Boolean @default(true)
   
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -110,7 +181,7 @@ model RoutineLog {
   id        String   @id @default(cuid())
   userId    String
   actionId  String
-  date      DateTime @db.Date
+  date      String
   completed Boolean
 
   user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -120,6 +191,33 @@ model RoutineLog {
   @@map("routine_logs")
 }
 
+model NightRoutineAction {
+  id         String   @id @default(cuid())
+  userId     String
+  name       String
+  importance Priority
+  createdAt  DateTime @default(now())
+
+  user User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs NightRoutineLog[]
+
+  @@map("night_routine_actions")
+}
+
+model NightRoutineLog {
+  id        String   @id @default(cuid())
+  userId    String
+  actionId  String
+  date      String
+  completed Boolean
+
+  user   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action NightRoutineAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+
+  @@unique([actionId, date])
+  @@map("night_routine_logs")
+}
+
 model Task {
   id          String      @id @default(cuid())
   userId      String
@@ -127,11 +225,11 @@ model Task {
   description String?
   priority    Priority
   status      TaskStatus
-  dueDate     DateTime?
+  dueDate     String?
   missionId   String?
   projectId   String?
   createdAt   DateTime    @default(now())
-  completedAt DateTime?
+  completedAt String?
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   mission Mission? @relation(fields: [missionId], references: [id], onDelete: SetNull)
@@ -148,9 +246,9 @@ model Mission {
   timeFrame   TimeFrame
   priority    Priority
   status      TaskStatus
-  dueDate     DateTime?
+  dueDate     String?
   createdAt   DateTime    @default(now())
-  completedAt DateTime?
+  completedAt String?
 
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks          Task[]
@@ -160,14 +258,14 @@ model Mission {
 }
 
 model Project {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   userId      String
   title       String
   description String?
   objectives  String[]
-  deadline    DateTime?
-  createdAt   DateTime  @default(now())
-  completedAt DateTime?
+  deadline    String?
+  createdAt   DateTime @default(now())
+  completedAt String?
 
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks          Task[]
@@ -180,7 +278,7 @@ model CalendarEvent {
   id                String              @id @default(cuid())
   userId            String
   title             String
-  date              DateTime            @db.Date
+  date              String
   startTime         String?
   endTime           String?
   priority          Priority
@@ -209,4 +307,146 @@ model DailyInsight {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("daily_insights")
+}
+
+model SleepLog {
+  id       String @id @default(cuid())
+  userId   String
+  date     String
+  bedTime  String
+  wakeTime String
+  duration Int
+  quality  Int
+  notes    String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@map("sleep_logs")
+}
+
+model WorkoutSession {
+  id         String            @id @default(cuid())
+  userId     String
+  date       String
+  type       ActivityType
+  customType String?
+  duration   Int
+  notes      String?
+  intensity  WorkoutIntensity
+  completed  Boolean           @default(false)
+  programId  String?
+  missionId  String?
+
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  program WorkoutProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
+
+  @@map("workout_sessions")
+}
+
+model WorkoutProgram {
+  id                  String                   @id @default(cuid())
+  userId              String
+  name                String
+  description         String?
+  active              Boolean                  @default(true)
+  autoCreateMissions  Boolean                  @default(false)
+  createdAt           DateTime                 @default(now())
+
+  user     User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions WorkoutProgramSession[]
+  workouts WorkoutSession[]
+
+  @@map("workout_programs")
+}
+
+model WorkoutProgramSession {
+  id         String            @id @default(cuid())
+  programId  String
+  dayOfWeek  Int
+  type       ActivityType
+  customType String?
+  duration   Int
+  intensity  WorkoutIntensity
+  notes      String?
+
+  program WorkoutProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@map("workout_program_sessions")
+}
+
+model PersonalRecord {
+  id       String   @id @default(cuid())
+  userId   String
+  exercise String
+  value    Float
+  reps     Int?
+  unit     String
+  date     String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("personal_records")
+}
+
+model FitnessProfile {
+  id            String        @id @default(cuid())
+  userId        String        @unique
+  age           Int
+  weight        Float
+  height        Float
+  gender        Gender
+  goal          FitnessGoal
+  activityLevel ActivityLevel
+  targetWeight  Float?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("fitness_profiles")
+}
+
+model DailyNutrition {
+  id       String @id @default(cuid())
+  userId   String
+  date     String
+  calories Int
+  protein  Float
+  carbs    Float
+  fats     Float
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meals Meal[]
+
+  @@unique([userId, date])
+  @@map("daily_nutrition")
+}
+
+model Meal {
+  id              String @id @default(cuid())
+  dailyNutritionId String
+  name            String
+  time            String
+  calories        Int
+  protein         Float
+  carbs           Float
+  fats            Float
+
+  dailyNutrition DailyNutrition @relation(fields: [dailyNutritionId], references: [id], onDelete: Cascade)
+
+  @@map("meals")
+}
+
+model DashboardWidget {
+  id      String     @id @default(cuid())
+  userId  String
+  type    WidgetType
+  enabled Boolean    @default(true)
+  order   Int
+  width   Int
+  height  Int
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("dashboard_widgets")
 }

@@ -5,15 +5,15 @@ services:
     container_name: dashboard_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_USER: dashboard_user
+      POSTGRES_PASSWORD: dashboard_secret_2026
       POSTGRES_DB: dashboard_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d dashboard_db"]
+      test: ["CMD-SHELL", "pg_isready -U dashboard_user -d dashboard_db"]
       interval: 10s
       timeout: 5s
       retries: 5
