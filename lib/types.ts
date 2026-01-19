@@ -14,8 +14,23 @@ export type WidgetType =
   | "week-missions"
   | "active-projects"
   | "sleep-summary"
+  | "sleep-bedtime-cycles"
+  | "sleep-quality-avg"
+  | "sleep-duration-avg"
+  | "sleep-last-night"
   | "night-routine-progress"
+  | "night-routine-list"
   | "workout-summary"
+  | "workout-week-count"
+  | "workout-last-session"
+  | "workout-calories"
+  | "nutrition-daily"
+  | "nutrition-macros"
+  | "routine-streak"
+  | "mission-priority-high"
+  | "tasks-today"
+  | "tasks-urgent"
+  | "project-progress"
 
 export interface DashboardWidget {
   id: string
@@ -24,14 +39,6 @@ export interface DashboardWidget {
   order: number
   width: 1 | 2 | 3 | 4
   height: 1 | 2
-}
-
-export interface RoutineAction {
-  id: string
-  type: WidgetType
-  enabled: boolean
-  order: number
-  size: "small" | "medium" | "large"
 }
 
 export interface RoutineAction {
@@ -128,6 +135,29 @@ export interface WorkoutSession {
   duration: number // minutes
   notes?: string
   intensity: "light" | "moderate" | "intense"
+  completed?: boolean // Pour valider la séance
+  programId?: string // Lié à un programme
+  missionId?: string // Lié à une mission
+}
+
+export interface WorkoutProgramSession {
+  id: string
+  dayOfWeek: number // 0=Dimanche, 1=Lundi, etc.
+  type: ActivityType
+  customType?: string
+  duration: number
+  intensity: "light" | "moderate" | "intense"
+  notes?: string
+}
+
+export interface WorkoutProgram {
+  id: string
+  name: string
+  description?: string
+  sessions: WorkoutProgramSession[]
+  active: boolean
+  autoCreateMissions: boolean // Créer automatiquement les missions
+  createdAt: string
 }
 
 export interface PersonalRecord {
@@ -205,6 +235,7 @@ export interface AppState {
   dailyInsights: DailyInsight[]
   sleepLogs: SleepLog[]
   workoutSessions: WorkoutSession[]
+  workoutPrograms: WorkoutProgram[]
   personalRecords: PersonalRecord[]
   fitnessProfile: FitnessProfile | null
   dailyNutrition: DailyNutrition[]
@@ -242,6 +273,9 @@ export type AppAction =
   | { type: "ADD_WORKOUT"; payload: WorkoutSession }
   | { type: "UPDATE_WORKOUT"; payload: WorkoutSession }
   | { type: "DELETE_WORKOUT"; payload: string }
+  | { type: "ADD_WORKOUT_PROGRAM"; payload: WorkoutProgram }
+  | { type: "UPDATE_WORKOUT_PROGRAM"; payload: WorkoutProgram }
+  | { type: "DELETE_WORKOUT_PROGRAM"; payload: string }
   | { type: "ADD_PERSONAL_RECORD"; payload: PersonalRecord }
   | { type: "UPDATE_PERSONAL_RECORD"; payload: PersonalRecord }
   | { type: "DELETE_PERSONAL_RECORD"; payload: string }

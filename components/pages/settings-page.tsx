@@ -311,6 +311,43 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Profil de santé */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Profil de santé</CardTitle>
+          <CardDescription>Recommandations pour une vie équilibrée</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-4">
+            <div>
+              <h3 className="font-semibold mb-3">Hydratation et sommeil</h3>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg bg-muted border">
+                  <div className="flex items-center gap-3">
+                    <div className="text-4xl">💧</div>
+                    <div>
+                      <p className="font-semibold">Hydratation</p>
+                      <p className="text-2xl font-bold">2–2,5 L</p>
+                      <p className="text-sm text-muted-foreground">par jour</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 rounded-lg bg-muted border">
+                  <div className="flex items-center gap-3">
+                    <div className="text-4xl">😴</div>
+                    <div>
+                      <p className="font-semibold">Sommeil</p>
+                      <p className="text-2xl font-bold">7–9 h</p>
+                      <p className="text-sm text-muted-foreground">Essentiel pour la récupération</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* About */}
       <Card>
         <CardHeader>

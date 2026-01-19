@@ -5,13 +5,14 @@ import { useApp } from "@/lib/store"
 import { generateId, getToday } from "@/lib/store"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Dumbbell, Plus, Trash2, TrendingUp, Apple, Trophy, User, Calendar as CalendarIcon } from "lucide-react"
-import type { WorkoutSession, PersonalRecord, FitnessProfile, DailyNutrition, Meal, ActivityType, FitnessGoal } from "@/lib/types"
+import { Dumbbell, Plus, Trash2, TrendingUp, Apple, Trophy, User, Calendar as CalendarIcon, Droplets, Moon, Calendar, Clock, CheckCircle2 } from "lucide-react"
+import type { WorkoutSession, PersonalRecord, FitnessProfile, DailyNutrition, Meal, ActivityType, FitnessGoal, WorkoutProgram, WorkoutProgramSession, Mission, TimeFrame, Priority, TaskStatus } from "@/lib/types"
 
 export function SportPage() {
   const { state, dispatch } = useApp()
@@ -19,7 +20,13 @@ export function SportPage() {
   const [showWorkoutForm, setShowWorkoutForm] = useState(false)
   const [showPRForm, setShowPRForm] = useState(false)
   const [showMealForm, setShowMealForm] = useState(false)
+  const [editingMeal, setEditingMeal] = useState<Meal | null>(null)
   const [showProfileForm, setShowProfileForm] = useState(!state.fitnessProfile)
+  const [showProgramForm, setShowProgramForm] = useState(false)
+  const [editingWorkout, setEditingWorkout] = useState<WorkoutSession | null>(null)
+  const [showApplyDialog, setShowApplyDialog] = useState(false)
+  const [selectedProgramId, setSelectedProgramId] = useState<string | null>(null)
+  const [applyWeeks, setApplyWeeks] = useState(4)
   const [selectedDate, setSelectedDate] = useState(getToday())
 
   // États pour les formulaires
@@ -58,6 +65,22 @@ export function SportPage() {
       activityLevel: "moderate",
     }
   )
+
+  const [newProgram, setNewProgram] = useState<Partial<WorkoutProgram>>({
+    name: "",
+    description: "",
+    sessions: [],
+    active: true,
+    autoCreateMissions: false,
+  })
+
+  const [newProgramSession, setNewProgramSession] = useState<Partial<WorkoutProgramSession>>({
+    dayOfWeek: 1,
+    type: "gym",
+    customType: "",
+    duration: 60,
+    intensity: "moderate",
+  })
 
   // Calculer les macros recommandées basé sur le profil
   const calculateMacros = (profile: FitnessProfile) => {
@@ -102,6 +125,16 @@ export function SportPage() {
 
   const recommendedMacros = state.fitnessProfile ? calculateMacros(state.fitnessProfile) : null
 
+  // Calcul de l'hydratation recommandée (30-35ml par kg)
+  const calculateHydration = (profile: FitnessProfile) => {
+    const baseHydration = profile.weight * 0.035 // 35ml par kg
+    const min = Math.round((profile.weight * 0.030) * 10) / 10 // 30ml par kg
+    const max = Math.round((profile.weight * 0.035) * 10) / 10 // 35ml par kg
+    return { min, max }
+  }
+
+  const recommendedHydration = state.fitnessProfile ? calculateHydration(state.fitnessProfile) : null
+
   // Nutrition du jour
   const todayNutrition = state.dailyNutrition.find((n) => n.date === getToday())
 
@@ -145,7 +178,7 @@ export function SportPage() {
   }
 
   const getWorkoutForDate = (dateStr: string) => {
-    return state.workoutSessions.find((workout) => workout.date === dateStr)
+    return state.workoutSessions.filter((workout) => workout.date === dateStr)
   }
 
   const navigateMonth = (direction: number) => {
@@ -159,23 +192,193 @@ export function SportPage() {
   const addWorkout = () => {
     if (!newWorkout.type || !newWorkout.duration) return
 
-    const workout: WorkoutSession = {
-      id: generateId(),
-      date: newWorkout.date || getToday(),
-      type: newWorkout.type as ActivityType,
-      customType: newWorkout.type === "other" ? newWorkout.customType : undefined,
-      duration: newWorkout.duration,
-      notes: newWorkout.notes,
-      intensity: newWorkout.intensity || "moderate",
+    if (editingWorkout) {
+      // Mode édition
+      const updated: WorkoutSession = {
+        ...editingWorkout,
+        type: newWorkout.type as ActivityType,
+        customType: newWorkout.type === "other" ? newWorkout.customType : undefined,
+        duration: newWorkout.duration!,
+        notes: newWorkout.notes,
+        intensity: newWorkout.intensity || "moderate",
+      }
+      dispatch({ type: "UPDATE_WORKOUT", payload: updated })
+      setEditingWorkout(null)
+    } else {
+      // Mode ajout
+      const workout: WorkoutSession = {
+        id: generateId(),
+        date: newWorkout.date || getToday(),
+        type: newWorkout.type as ActivityType,
+        customType: newWorkout.type === "other" ? newWorkout.customType : undefined,
+        duration: newWorkout.duration,
+        notes: newWorkout.notes,
+        intensity: newWorkout.intensity || "moderate",
+      }
+      dispatch({ type: "ADD_WORKOUT", payload: workout })
     }
 
-    dispatch({ type: "ADD_WORKOUT", payload: workout })
     setShowWorkoutForm(false)
     setNewWorkout({ date: getToday(), type: "gym", customType: "", duration: 60, intensity: "moderate" })
   }
 
+  const editWorkout = (workout: WorkoutSession) => {
+    setEditingWorkout(workout)
+    setNewWorkout({
+      date: workout.date,
+      type: workout.type,
+      customType: workout.customType || "",
+      duration: workout.duration,
+      notes: workout.notes,
+      intensity: workout.intensity,
+    })
+    setShowWorkoutForm(true)
+  }
+
   const deleteWorkout = (id: string) => {
     dispatch({ type: "DELETE_WORKOUT", payload: id })
+  }
+
+  const toggleWorkoutCompletion = (workout: WorkoutSession) => {
+    dispatch({
+      type: "UPDATE_WORKOUT",
+      payload: { ...workout, completed: !workout.completed },
+    })
+  }
+
+  // Gestion des programmes
+  const generateProgramWorkouts = (program: WorkoutProgram, startDate: string, weeks: number = 4) => {
+    const workouts: WorkoutSession[] = []
+    const start = new Date(startDate)
+
+    for (let week = 0; week < weeks; week++) {
+      program.sessions.forEach((session) => {
+        const date = new Date(start)
+        date.setDate(start.getDate() + week * 7 + (session.dayOfWeek - start.getDay() + 7) % 7)
+        
+        const workout: WorkoutSession = {
+          id: generateId(),
+          date: date.toISOString().split("T")[0],
+          type: session.type,
+          customType: session.customType,
+          duration: session.duration,
+          intensity: session.intensity,
+          notes: session.notes,
+          programId: program.id,
+        }
+        workouts.push(workout)
+      })
+    }
+
+    return workouts
+  }
+
+  const applyProgram = (programId: string, weeks: number = 4) => {
+    const program = state.workoutPrograms.find((p) => p.id === programId)
+    if (!program) return
+
+    const workouts = generateProgramWorkouts(program, getToday(), weeks)
+    
+    // Filtrer les workouts qui n'existent pas déjà (éviter les doublons)
+    const newWorkouts = workouts.filter((workout) => {
+      // Vérifier s'il existe déjà un workout du même programme à la même date
+      const existingWorkout = state.workoutSessions.find(
+        (w) => w.programId === program.id && w.date === workout.date
+      )
+      return !existingWorkout
+    })
+
+    // Ajouter uniquement les nouveaux workouts
+    newWorkouts.forEach((workout) => {
+      dispatch({ type: "ADD_WORKOUT", payload: workout })
+    })
+
+    // Créer les missions si activé ET si le programme est actif
+    if (program.autoCreateMissions && program.active) {
+      newWorkouts.forEach((workout) => {
+        const mission = state.missions.find(
+          (m) => m.timeFrame === "day" && m.dueDate === workout.date && m.title.includes(program.name)
+        )
+        if (!mission) {
+          const newMission = {
+            id: generateId(),
+            title: `${program.name} - ${activityTypeLabels[workout.type]}`,
+            description: `Séance de ${workout.duration} min`,
+            timeFrame: "day" as TimeFrame,
+            priority: "medium" as Priority,
+            status: "todo" as TaskStatus,
+            tasks: [],
+            dueDate: workout.date,
+            createdAt: new Date().toISOString(),
+          }
+          dispatch({ type: "ADD_MISSION", payload: newMission })
+          
+          // Lier le workout à la mission
+          dispatch({
+            type: "UPDATE_WORKOUT",
+            payload: { ...workout, missionId: newMission.id },
+          })
+        }
+      })
+    }
+  }
+
+  const addProgramSession = () => {
+    if (!newProgramSession.dayOfWeek || !newProgramSession.type || !newProgramSession.duration) return
+
+    const session: WorkoutProgramSession = {
+      id: generateId(),
+      dayOfWeek: newProgramSession.dayOfWeek!,
+      type: newProgramSession.type as ActivityType,
+      customType: newProgramSession.type === "other" ? newProgramSession.customType : undefined,
+      duration: newProgramSession.duration,
+      intensity: newProgramSession.intensity || "moderate",
+      notes: newProgramSession.notes,
+    }
+
+    setNewProgram({
+      ...newProgram,
+      sessions: [...(newProgram.sessions || []), session],
+    })
+
+    setNewProgramSession({
+      dayOfWeek: 1,
+      type: "gym",
+      customType: "",
+      duration: 60,
+      intensity: "moderate",
+    })
+  }
+
+  const removeProgramSession = (id: string) => {
+    setNewProgram({
+      ...newProgram,
+      sessions: (newProgram.sessions || []).filter((s) => s.id !== id),
+    })
+  }
+
+  const saveProgram = () => {
+    if (!newProgram.name || !newProgram.sessions || newProgram.sessions.length === 0) return
+
+    const program: WorkoutProgram = {
+      id: generateId(),
+      name: newProgram.name,
+      description: newProgram.description,
+      sessions: newProgram.sessions,
+      active: newProgram.active ?? true,
+      autoCreateMissions: newProgram.autoCreateMissions ?? false,
+      createdAt: new Date().toISOString(),
+    }
+
+    dispatch({ type: "ADD_WORKOUT_PROGRAM", payload: program })
+    setShowProgramForm(false)
+    setNewProgram({
+      name: "",
+      description: "",
+      sessions: [],
+      active: true,
+      autoCreateMissions: false,
+    })
   }
 
   const addPR = () => {
@@ -204,42 +407,93 @@ export function SportPage() {
     setShowProfileForm(false)
   }
 
-  const addMeal = () => {
+  const saveMeal = () => {
     if (!newMeal.name) return
 
-    const meal: Meal = {
-      id: generateId(),
-      name: newMeal.name,
-      time: newMeal.time || "12:00",
-      calories: newMeal.calories || 0,
-      protein: newMeal.protein || 0,
-      carbs: newMeal.carbs || 0,
-      fats: newMeal.fats || 0,
-    }
+    if (editingMeal) {
+      // Mode édition
+      if (!todayNutrition) return
 
-    if (todayNutrition) {
+      const oldMeal = todayNutrition.meals.find(m => m.id === editingMeal.id)!
+      const updatedMeals = todayNutrition.meals.map(m =>
+        m.id === editingMeal.id
+          ? {
+              ...m,
+              name: newMeal.name!,
+              time: newMeal.time || "12:00",
+              calories: newMeal.calories || 0,
+              protein: newMeal.protein || 0,
+              carbs: newMeal.carbs || 0,
+              fats: newMeal.fats || 0,
+            }
+          : m
+      )
+
       const updated: DailyNutrition = {
         ...todayNutrition,
-        meals: [...todayNutrition.meals, meal],
-        calories: todayNutrition.calories + meal.calories,
-        protein: todayNutrition.protein + meal.protein,
-        carbs: todayNutrition.carbs + meal.carbs,
-        fats: todayNutrition.fats + meal.fats,
+        meals: updatedMeals,
+        calories: todayNutrition.calories - oldMeal.calories + (newMeal.calories || 0),
+        protein: todayNutrition.protein - oldMeal.protein + (newMeal.protein || 0),
+        carbs: todayNutrition.carbs - oldMeal.carbs + (newMeal.carbs || 0),
+        fats: todayNutrition.fats - oldMeal.fats + (newMeal.fats || 0),
       }
       dispatch({ type: "UPDATE_DAILY_NUTRITION", payload: updated })
     } else {
-      const newNutrition: DailyNutrition = {
+      // Mode ajout
+      const meal: Meal = {
         id: generateId(),
-        date: getToday(),
-        calories: meal.calories,
-        protein: meal.protein,
-        carbs: meal.carbs,
-        fats: meal.fats,
-        meals: [meal],
+        name: newMeal.name!,
+        time: newMeal.time || "12:00",
+        calories: newMeal.calories || 0,
+        protein: newMeal.protein || 0,
+        carbs: newMeal.carbs || 0,
+        fats: newMeal.fats || 0,
       }
-      dispatch({ type: "ADD_DAILY_NUTRITION", payload: newNutrition })
+
+      if (todayNutrition) {
+        const updated: DailyNutrition = {
+          ...todayNutrition,
+          meals: [...todayNutrition.meals, meal],
+          calories: todayNutrition.calories + meal.calories,
+          protein: todayNutrition.protein + meal.protein,
+          carbs: todayNutrition.carbs + meal.carbs,
+          fats: todayNutrition.fats + meal.fats,
+        }
+        dispatch({ type: "UPDATE_DAILY_NUTRITION", payload: updated })
+      } else {
+        const newNutrition: DailyNutrition = {
+          id: generateId(),
+          date: getToday(),
+          calories: meal.calories,
+          protein: meal.protein,
+          carbs: meal.carbs,
+          fats: meal.fats,
+          meals: [meal],
+        }
+        dispatch({ type: "ADD_DAILY_NUTRITION", payload: newNutrition })
+      }
     }
 
+    setShowMealForm(false)
+    setEditingMeal(null)
+    setNewMeal({ name: "", time: "12:00", calories: 0, protein: 0, carbs: 0, fats: 0 })
+  }
+
+  const startEditMeal = (meal: Meal) => {
+    setEditingMeal(meal)
+    setNewMeal({
+      name: meal.name,
+      time: meal.time,
+      calories: meal.calories,
+      protein: meal.protein,
+      carbs: meal.carbs,
+      fats: meal.fats,
+    })
+    setShowMealForm(true)
+  }
+
+  const cancelEditMeal = () => {
+    setEditingMeal(null)
     setShowMealForm(false)
     setNewMeal({ name: "", time: "12:00", calories: 0, protein: 0, carbs: 0, fats: 0 })
   }
@@ -413,10 +667,7 @@ export function SportPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Dumbbell className="h-8 w-8" />
-          Sport & Nutrition
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight">Sport & Nutrition</h1>
         <p className="text-muted-foreground">Suivez vos entraînements et votre alimentation</p>
       </div>
 
@@ -468,10 +719,14 @@ export function SportPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="workouts">
             <Dumbbell className="mr-2 h-4 w-4" />
             Entraînements
+          </TabsTrigger>
+          <TabsTrigger value="programs">
+            <Calendar className="mr-2 h-4 w-4" />
+            Programmes
           </TabsTrigger>
           <TabsTrigger value="nutrition">
             <Apple className="mr-2 h-4 w-4" />
@@ -527,39 +782,81 @@ export function SportPage() {
                 <div className="grid grid-cols-7">
                   {calendarDays.map((day, index) => {
                     const dateStr = day.date.toISOString().split("T")[0]
-                    const workout = getWorkoutForDate(dateStr)
+                    const workouts = getWorkoutForDate(dateStr)
                     const isToday = dateStr === getToday()
                     
                     return (
                       <div
                         key={index}
                         className={`
-                          min-h-24 p-2 border-t border-r relative cursor-pointer hover:bg-accent/50 transition-colors
+                          min-h-28 p-2 border-t border-r relative hover:bg-accent/50 transition-colors
                           ${!day.isCurrentMonth ? "bg-muted/30 text-muted-foreground" : ""}
                           ${isToday ? "bg-primary/5 ring-2 ring-primary ring-inset" : ""}
-                          ${workout ? "bg-green-50 dark:bg-green-950/20" : ""}
+                          ${workouts.length > 0 ? "bg-green-50 dark:bg-green-950/20" : ""}
                         `}
-                        onClick={() => {
-                          setNewWorkout({
-                            ...newWorkout,
-                            date: dateStr,
-                          })
-                          setShowWorkoutForm(true)
-                        }}
                       >
-                        <div className="text-sm font-semibold mb-1">
-                          {day.date.getDate()}
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="text-sm font-semibold">
+                            {day.date.getDate()}
+                          </div>
+                          {isToday && (
+                            <Badge variant="default" className="text-xs px-1.5 py-0 h-5">
+                              Aujourd'hui
+                            </Badge>
+                          )}
                         </div>
-                        {workout && (
-                          <div className="space-y-1">
-                            <div className="text-xs bg-green-500/10 text-green-600 dark:text-green-400 px-1 py-0.5 rounded">
-                              {workout.type === "other" && workout.customType ? workout.customType : activityTypeLabels[workout.type]}
-                            </div>
-                            <div className="text-xs font-semibold">
-                              {workout.duration} min
-                            </div>
+                        {workouts.length > 0 && (
+                          <div className="space-y-1 max-h-20 overflow-y-auto">
+                            {workouts.map((workout) => (
+                              <div
+                                key={workout.id}
+                                className="group relative cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  editWorkout(workout)
+                                }}
+                              >
+                                <div className={`text-xs px-1 py-0.5 rounded flex items-center justify-between ${
+                                  workout.completed
+                                    ? "bg-green-500/20 text-green-700 dark:text-green-300 line-through"
+                                    : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                                }`}>
+                                  <span className="truncate">
+                                    {workout.type === "other" && workout.customType ? workout.customType : activityTypeLabels[workout.type]}
+                                  </span>
+                                  <CheckCircle2
+                                    className={`h-3 w-3 ml-1 flex-shrink-0 cursor-pointer ${
+                                      workout.completed ? "text-green-600" : "text-muted-foreground"
+                                    }`}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      toggleWorkoutCompletion(workout)
+                                    }}
+                                  />
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {workout.duration} min
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute bottom-1 right-1 h-6 w-6 opacity-0 hover:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setNewWorkout({
+                              ...newWorkout,
+                              date: dateStr,
+                            })
+                            setEditingWorkout(null)
+                            setShowWorkoutForm(true)
+                          }}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
                       </div>
                     )
                   })}
@@ -567,10 +864,13 @@ export function SportPage() {
               </div>
 
               {/* Dialog pour ajout/édition */}
-              <Dialog open={showWorkoutForm} onOpenChange={setShowWorkoutForm}>
+              <Dialog open={showWorkoutForm} onOpenChange={(open) => {
+                if (!open) setEditingWorkout(null)
+                setShowWorkoutForm(open)
+              }}>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Enregistrer l'entraînement</DialogTitle>
+                    <DialogTitle>{editingWorkout ? "Modifier l'entraînement" : "Ajouter un entraînement"}</DialogTitle>
                     <DialogDescription>
                       {new Date(newWorkout.date || getToday()).toLocaleDateString("fr-FR", { dateStyle: "full" })}
                     </DialogDescription>
@@ -644,26 +944,158 @@ export function SportPage() {
                   </div>
 
                   <DialogFooter>
-                    {getWorkoutForDate(newWorkout.date || getToday()) && (
+                    {editingWorkout && (
                       <Button
                         variant="destructive"
                         onClick={() => {
-                          const workout = getWorkoutForDate(newWorkout.date || getToday())
-                          if (workout) deleteWorkout(workout.id)
+                          deleteWorkout(editingWorkout.id)
                           setShowWorkoutForm(false)
+                          setEditingWorkout(null)
                         }}
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
                         Supprimer
                       </Button>
                     )}
-                    <Button variant="outline" onClick={() => setShowWorkoutForm(false)}>
+                    <Button variant="outline" onClick={() => {
+                      setShowWorkoutForm(false)
+                      setEditingWorkout(null)
+                    }}>
                       Annuler
                     </Button>
-                    <Button onClick={addWorkout}>Enregistrer</Button>
+                    <Button onClick={addWorkout}>{editingWorkout ? "Enregistrer" : "Ajouter"}</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Onglet Programmes */}
+        <TabsContent value="programs" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Programmes d'entraînement</CardTitle>
+                  <CardDescription>Créez des programmes récurrents et générez automatiquement vos séances</CardDescription>
+                </div>
+                <Button onClick={() => setShowProgramForm(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nouveau programme
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {state.workoutPrograms.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Calendar className="mx-auto h-12 w-12 mb-4 opacity-50" />
+                  <p>Aucun programme d'entraînement</p>
+                  <p className="text-sm">Créez votre premier programme pour organiser vos séances</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {state.workoutPrograms.map((program) => (
+                    <Card key={program.id} className={program.active ? "border-green-500" : ""}>
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <CardTitle className="text-lg">{program.name}</CardTitle>
+                            {program.description && (
+                              <CardDescription>{program.description}</CardDescription>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant={program.active ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => {
+                                dispatch({
+                                  type: "UPDATE_WORKOUT_PROGRAM",
+                                  payload: { ...program, active: !program.active },
+                                })
+                              }}
+                            >
+                              {program.active ? "Actif" : "Inactif"}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedProgramId(program.id)
+                                setShowApplyDialog(true)
+                              }}
+                            >
+                              Appliquer
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                if (confirm("Supprimer ce programme ? Toutes les séances générées seront également supprimées.")) {
+                                  // Supprimer toutes les séances liées au programme
+                                  const linkedWorkouts = state.workoutSessions.filter((w) => w.programId === program.id)
+                                  linkedWorkouts.forEach((workout) => {
+                                    // Supprimer la mission associée si elle existe
+                                    if (workout.missionId) {
+                                      dispatch({ type: "DELETE_MISSION", payload: workout.missionId })
+                                    }
+                                    // Supprimer le workout
+                                    dispatch({ type: "DELETE_WORKOUT", payload: workout.id })
+                                  })
+                                  
+                                  // Supprimer le programme
+                                  dispatch({ type: "DELETE_WORKOUT_PROGRAM", payload: program.id })
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Clock className="h-4 w-4" />
+                            <span>{program.sessions.length} séances par semaine</span>
+                            {program.autoCreateMissions && (
+                              <span className="ml-4 text-green-600">• Missions automatiques</span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-7 gap-2 mt-4">
+                            {["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"].map((day, dayIndex) => {
+                              const session = program.sessions.find((s) => s.dayOfWeek === dayIndex)
+                              return (
+                                <div
+                                  key={dayIndex}
+                                  className={`p-2 rounded text-center text-xs ${
+                                    session
+                                      ? "bg-primary text-primary-foreground"
+                                      : "bg-muted text-muted-foreground"
+                                  }`}
+                                >
+                                  <div className="font-semibold">{day}</div>
+                                  {session && (
+                                    <>
+                                      <div className="mt-1 truncate">
+                                        {session.type === "other" && session.customType
+                                          ? session.customType
+                                          : activityTypeLabels[session.type]}
+                                      </div>
+                                      <div>{session.duration}min</div>
+                                    </>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -711,65 +1143,6 @@ export function SportPage() {
             </Card>
           )}
 
-          {/* Conseils nutritionnels */}
-          <Card>
-            <CardHeader>
-              <CardTitle>💡 Conseils nutritionnels</CardTitle>
-              <CardDescription>Recommandations pour optimiser vos performances</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {/* Répartition des repas */}
-                <div>
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
-                    🍽️ Répartition des repas
-                  </h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
-                      <p className="text-sm font-medium">Petit-déjeuner</p>
-                      <p className="text-2xl font-bold text-blue-600">25%</p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
-                      <p className="text-sm font-medium">Déjeuner</p>
-                      <p className="text-2xl font-bold text-green-600">30%</p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800">
-                      <p className="text-sm font-medium">Collation</p>
-                      <p className="text-2xl font-bold text-yellow-600">15%</p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800">
-                      <p className="text-sm font-medium">Dîner</p>
-                      <p className="text-2xl font-bold text-orange-600">30%</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Hydratation et Sommeil */}
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-lg bg-cyan-50 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-800">
-                    <div className="flex items-center gap-3">
-                      <div className="text-4xl">💧</div>
-                      <div>
-                        <p className="font-semibold text-cyan-700 dark:text-cyan-400">Hydratation</p>
-                        <p className="text-2xl font-bold text-cyan-600">2–2,5 L</p>
-                        <p className="text-sm text-muted-foreground">par jour</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800">
-                    <div className="flex items-center gap-3">
-                      <div className="text-4xl">😴</div>
-                      <div>
-                        <p className="font-semibold text-purple-700 dark:text-purple-400">Sommeil</p>
-                        <p className="text-2xl font-bold text-purple-600">7–9 h</p>
-                        <p className="text-sm text-muted-foreground">Clé pour la prise de masse</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
           <Card>
             <CardHeader>
@@ -787,6 +1160,7 @@ export function SportPage() {
             <CardContent className="space-y-4">
               {showMealForm && (
                 <div className="p-4 border rounded-lg space-y-4 bg-muted/50">
+                  <h3 className="font-semibold">{editingMeal ? "Modifier le repas" : "Ajouter un repas"}</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label>Nom du repas</Label>
@@ -840,8 +1214,8 @@ export function SportPage() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button onClick={addMeal}>Ajouter</Button>
-                    <Button variant="outline" onClick={() => setShowMealForm(false)}>
+                    <Button onClick={saveMeal}>{editingMeal ? "Enregistrer" : "Ajouter"}</Button>
+                    <Button variant="outline" onClick={cancelEditMeal}>
                       Annuler
                     </Button>
                   </div>
@@ -878,13 +1252,24 @@ export function SportPage() {
                           </div>
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => deleteMeal(meal.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => startEditMeal(meal)}
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteMeal(meal.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 {!todayNutrition || todayNutrition.meals.length === 0 ? (
@@ -892,6 +1277,42 @@ export function SportPage() {
                     Aucun repas enregistré aujourd'hui
                   </p>
                 ) : null}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Conseils nutritionnels */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Conseils nutritionnels</CardTitle>
+              <CardDescription>Recommandations pour optimiser vos performances</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {/* Répartition des repas */}
+                <div>
+                  <h3 className="font-semibold mb-3 flex items-center gap-2">
+                    Répartition des repas
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-lg bg-muted border">
+                      <p className="text-sm font-medium">Petit-déjeuner</p>
+                      <p className="text-2xl font-bold">25%</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-muted border">
+                      <p className="text-sm font-medium">Déjeuner</p>
+                      <p className="text-2xl font-bold">30%</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-muted border">
+                      <p className="text-sm font-medium">Collation</p>
+                      <p className="text-2xl font-bold">15%</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-muted border">
+                      <p className="text-sm font-medium">Dîner</p>
+                      <p className="text-2xl font-bold">30%</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1082,12 +1503,49 @@ export function SportPage() {
             </CardContent>
           </Card>
 
-          {showProfileForm && state.fitnessProfile && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Modifier mon profil</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+          {/* Recommandations santé */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Recommandations santé</CardTitle>
+              <CardDescription>Pour optimiser vos performances et récupération</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg bg-muted border">
+                  <div className="flex items-center gap-3">
+                    <Droplets className="h-10 w-10" />
+                    <div>
+                      <p className="font-semibold">Hydratation</p>
+                      {recommendedHydration ? (
+                        <p className="text-2xl font-bold">{recommendedHydration.min}–{recommendedHydration.max} L</p>
+                      ) : (
+                        <p className="text-2xl font-bold">2–2,5 L</p>
+                      )}
+                      <p className="text-sm text-muted-foreground">par jour</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 rounded-lg bg-muted border">
+                  <div className="flex items-center gap-3">
+                    <Moon className="h-10 w-10" />
+                    <div>
+                      <p className="font-semibold">Sommeil</p>
+                      <p className="text-2xl font-bold">7–9 h</p>
+                      <p className="text-sm text-muted-foreground">Essentiel pour la récupération</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Dialog open={showProfileForm && !!state.fitnessProfile} onOpenChange={setShowProfileForm}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Modifier mon profil</DialogTitle>
+                <DialogDescription>Mettez à jour vos informations pour des recommandations personnalisées</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Âge</Label>
@@ -1169,18 +1627,328 @@ export function SportPage() {
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div className="flex gap-2">
-                  <Button onClick={saveProfile}>Enregistrer</Button>
-                  <Button variant="outline" onClick={() => setShowProfileForm(false)}>
-                    Annuler
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowProfileForm(false)}>
+                  Annuler
+                </Button>
+                <Button onClick={saveProfile}>Enregistrer</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog pour créer un programme */}
+      <Dialog open={showProgramForm} onOpenChange={setShowProgramForm}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Créer un programme d'entraînement</DialogTitle>
+            <DialogDescription>
+              Définissez vos séances hebdomadaires et générez-les automatiquement
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <div>
+                <Label>Nom du programme *</Label>
+                <Input
+                  placeholder="Ex: Programme Full Body"
+                  value={newProgram.name}
+                  onChange={(e) => setNewProgram({ ...newProgram, name: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <Label>Description</Label>
+                <Input
+                  placeholder="Ex: 4 séances par semaine"
+                  value={newProgram.description}
+                  onChange={(e) => setNewProgram({ ...newProgram, description: e.target.value })}
+                />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="autoMissions"
+                  checked={newProgram.autoCreateMissions}
+                  onChange={(e) =>
+                    setNewProgram({ ...newProgram, autoCreateMissions: e.target.checked })
+                  }
+                  className="rounded"
+                />
+                <Label htmlFor="autoMissions" className="cursor-pointer">
+                  Créer automatiquement les missions du jour
+                </Label>
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <h4 className="font-semibold mb-4">Séances de la semaine</h4>
+              
+              {newProgram.sessions && newProgram.sessions.length > 0 && (
+                <div className="space-y-2 mb-4">
+                  {newProgram.sessions.map((session) => (
+                    <div
+                      key={session.id}
+                      className="flex items-center justify-between p-3 rounded-lg border bg-muted/50"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="font-semibold min-w-16">
+                          {["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"][session.dayOfWeek]}
+                        </div>
+                        <div>
+                          <div className="font-medium">
+                            {session.type === "other" && session.customType
+                              ? session.customType
+                              : activityTypeLabels[session.type]}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {session.duration} min • {session.intensity === "light" ? "Légère" : session.intensity === "moderate" ? "Modérée" : "Intense"}
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeProgramSession(session.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-4 p-4 rounded-lg border bg-background">
+                <h5 className="font-medium">Ajouter une séance</h5>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Jour de la semaine *</Label>
+                    <Select
+                      value={String(newProgramSession.dayOfWeek)}
+                      onValueChange={(value) =>
+                        setNewProgramSession({ ...newProgramSession, dayOfWeek: parseInt(value) })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">Dimanche</SelectItem>
+                        <SelectItem value="1">Lundi</SelectItem>
+                        <SelectItem value="2">Mardi</SelectItem>
+                        <SelectItem value="3">Mercredi</SelectItem>
+                        <SelectItem value="4">Jeudi</SelectItem>
+                        <SelectItem value="5">Vendredi</SelectItem>
+                        <SelectItem value="6">Samedi</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Type d'activité *</Label>
+                    <Select
+                      value={newProgramSession.type}
+                      onValueChange={(value) =>
+                        setNewProgramSession({ ...newProgramSession, type: value as ActivityType })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="gym">Salle de sport</SelectItem>
+                        <SelectItem value="running">Course</SelectItem>
+                        <SelectItem value="climbing">Escalade</SelectItem>
+                        <SelectItem value="other">Autre</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {newProgramSession.type === "other" && (
+                  <div>
+                    <Label>Nom du sport</Label>
+                    <Input
+                      placeholder="Ex: Tennis, Natation..."
+                      value={newProgramSession.customType || ""}
+                      onChange={(e) =>
+                        setNewProgramSession({ ...newProgramSession, customType: e.target.value })
+                      }
+                    />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Durée (min) *</Label>
+                    <Input
+                      type="number"
+                      value={newProgramSession.duration}
+                      onChange={(e) =>
+                        setNewProgramSession({
+                          ...newProgramSession,
+                          duration: parseInt(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Intensité</Label>
+                    <Select
+                      value={newProgramSession.intensity}
+                      onValueChange={(value) =>
+                        setNewProgramSession({ ...newProgramSession, intensity: value as any })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="light">Légère</SelectItem>
+                        <SelectItem value="moderate">Modérée</SelectItem>
+                        <SelectItem value="intense">Intense</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Notes</Label>
+                  <Input
+                    placeholder="Ex: Upper body, Cardio..."
+                    value={newProgramSession.notes || ""}
+                    onChange={(e) =>
+                      setNewProgramSession({ ...newProgramSession, notes: e.target.value })
+                    }
+                  />
+                </div>
+
+                <Button onClick={addProgramSession} className="w-full">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Ajouter cette séance
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowProgramForm(false)}>
+              Annuler
+            </Button>
+            <Button
+              onClick={saveProgram}
+              disabled={!newProgram.name || !newProgram.sessions || newProgram.sessions.length === 0}
+            >
+              Créer le programme
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog pour appliquer un programme */}
+      <Dialog open={showApplyDialog} onOpenChange={setShowApplyDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Appliquer le programme</DialogTitle>
+            <DialogDescription>
+              Choisissez la période pour laquelle générer les séances
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-3">
+              <Button
+                variant="outline"
+                className="w-full justify-start h-auto py-4"
+                onClick={() => {
+                  setApplyWeeks(4)
+                }}
+              >
+                <div className="text-left">
+                  <div className="font-semibold">1 mois (4 semaines)</div>
+                  <div className="text-sm text-muted-foreground">Idéal pour démarrer</div>
+                </div>
+              </Button>
+
+              <Button
+                variant="outline"
+                className="w-full justify-start h-auto py-4"
+                onClick={() => {
+                  setApplyWeeks(12)
+                }}
+              >
+                <div className="text-left">
+                  <div className="font-semibold">3 mois (12 semaines)</div>
+                  <div className="text-sm text-muted-foreground">Programme complet</div>
+                </div>
+              </Button>
+
+              <Button
+                variant="outline"
+                className="w-full justify-start h-auto py-4"
+                onClick={() => {
+                  const today = new Date()
+                  const endOfYear = new Date(today.getFullYear(), 11, 31)
+                  const diffTime = Math.abs(endOfYear.getTime() - today.getTime())
+                  const diffWeeks = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 7))
+                  setApplyWeeks(diffWeeks)
+                }}
+              >
+                <div className="text-left">
+                  <div className="font-semibold">Jusqu'à fin d'année</div>
+                  <div className="text-sm text-muted-foreground">
+                    {(() => {
+                      const today = new Date()
+                      const endOfYear = new Date(today.getFullYear(), 11, 31)
+                      const diffTime = Math.abs(endOfYear.getTime() - today.getTime())
+                      const diffWeeks = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 7))
+                      return `${diffWeeks} semaines`
+                    })()}
+                  </div>
+                </div>
+              </Button>
+
+              <div className="pt-2">
+                <Label>Ou nombre de semaines personnalisé</Label>
+                <div className="flex gap-2 mt-2">
+                  <Input
+                    type="number"
+                    min="1"
+                    max="52"
+                    value={applyWeeks}
+                    onChange={(e) => setApplyWeeks(parseInt(e.target.value) || 4)}
+                    placeholder="Nombre de semaines"
+                  />
+                  <span className="text-sm text-muted-foreground self-center">semaines</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowApplyDialog(false)}>
+              Annuler
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedProgramId) {
+                  applyProgram(selectedProgramId, applyWeeks)
+                  setShowApplyDialog(false)
+                  setSelectedProgramId(null)
+                }
+              }}
+            >
+              Générer les séances
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

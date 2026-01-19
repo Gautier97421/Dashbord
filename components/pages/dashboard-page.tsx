@@ -39,47 +39,11 @@ import {
 import { useApp } from "@/lib/store"
 import { getToday, formatDateFr, calculateStreak, generateId } from "@/lib/store"
 import type { NavPage } from "@/components/app-sidebar"
+import type { WidgetType, DashboardWidget } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 interface DashboardPageProps {
   onNavigate: (page: NavPage) => void
-}
-
-type WidgetType =
-  | "routine-progress"
-  | "missions-stats"
-  | "tasks-stats"
-  | "projects-stats"
-  | "routine-list"
-  | "today-missions"
-  | "week-missions"
-  | "active-projects"
-  | "sleep-summary"
-  | "sleep-bedtime-cycles"
-  | "sleep-quality-avg"
-  | "sleep-duration-avg"
-  | "sleep-last-night"
-  | "night-routine-progress"
-  | "night-routine-list"
-  | "workout-summary"
-  | "workout-week-count"
-  | "workout-last-session"
-  | "workout-calories"
-  | "nutrition-daily"
-  | "nutrition-macros"
-  | "routine-streak"
-  | "mission-priority-high"
-  | "tasks-today"
-  | "tasks-urgent"
-  | "project-progress"
-
-interface DashboardWidget {
-  id: string
-  type: WidgetType
-  enabled: boolean
-  order: number
-  width: 1 | 2 | 3 | 4
-  height: 1 | 2
 }
 
 const WIDGET_LABELS: Record<WidgetType, { label: string; description: string; icon: any; category?: string }> = {
@@ -171,8 +135,24 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   }, [state.nightRoutineActions.length, todayNightLogs])
 
   const todayMissions = useMemo(() => {
-    return state.missions.filter((m) => m.timeFrame === "day" && m.status !== "done").slice(0, 3)
-  }, [state.missions])
+    return state.missions.filter((m) => {
+      // Filtrer par date et statut
+      if (m.timeFrame !== "day" || m.status === "done" || m.dueDate !== today) {
+        return false
+      }
+      
+      // Si la mission est liée à un workout, vérifier que le programme est actif
+      const linkedWorkout = state.workoutSessions.find((w) => w.missionId === m.id)
+      if (linkedWorkout?.programId) {
+        const program = state.workoutPrograms.find((p) => p.id === linkedWorkout.programId)
+        if (program && !program.active) {
+          return false
+        }
+      }
+      
+      return true
+    }).slice(0, 3)
+  }, [state.missions, state.workoutSessions, state.workoutPrograms, today])
 
   const weekMissions = useMemo(() => {
     return state.missions.filter((m) => m.timeFrame === "week" && m.status !== "done").slice(0, 3)
@@ -198,6 +178,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
       ? Math.round(recentSleepLogs.reduce((acc, log) => acc + log.duration, 0) / recentSleepLogs.length / 60)
       : 0
 
+    const avgSleepQuality = recentSleepLogs.length > 0
+      ? Math.round(recentSleepLogs.reduce((acc, log) => acc + log.quality, 0) / recentSleepLogs.length)
+      : 0
+
     // Workout stats
     const weekWorkouts = state.workoutSessions.filter((w) => {
       const weekAgo = new Date()
@@ -212,6 +196,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
       tasksTotal: totalTasks,
       projectsActive: state.projects.filter((p) => !p.completedAt).length,
       avgSleepHours: avgSleepDuration,
+      avgSleepQuality: avgSleepQuality,
       weekWorkouts,
     }
   }, [state.missions, state.tasks, state.projects, state.sleepLogs, state.workoutSessions])
@@ -344,7 +329,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     const widget = widgets.find((w) => w.id === resizingWidget)
     if (widget && (newWidth !== widget.width || newHeight !== widget.height)) {
       const updatedWidgets = widgets.map((w) =>
-        w.id === resizingWidget ? { ...w, width: newWidth, height: newHeight } : w
+        w.id === resizingWidget ? { ...w, width: newWidth as 1 | 2 | 3 | 4, height: newHeight as 1 | 2 } : w
       )
       setWidgets(updatedWidgets)
     }
@@ -811,7 +796,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
 
       case "routine-streak":
         const longestStreak = Math.max(
-          ...state.routineActions.map(action => calculateStreak(state.routineLogs, action.id).best),
+          ...state.routineActions.map(action => calculateStreak(state.routineLogs, action.id).longest),
           0
         )
         return (
@@ -906,13 +891,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         {enabledWidgets.map((widget) => (
           <div
             key={widget.id}
-            draggable={!resizingWidget}
-            onDragStart={(e) => handleDragStart(e, widget.id)}
             onDragOver={(e) => handleDragOver(e, widget.id)}
-            onDragEnd={handleDragEnd}
             onDrop={(e) => handleDrop(e, widget.id)}
             className={cn(
-              "relative cursor-move transition-all group",
+              "relative transition-all group",
               widget.width === 1 && "col-span-1",
               widget.width === 2 && "col-span-2",
               widget.width === 3 && "col-span-3",
@@ -925,6 +907,16 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           >
             {/* Widget Controls */}
             <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Drag Handle */}
+              <div
+                draggable={!resizingWidget}
+                onDragStart={(e) => handleDragStart(e, widget.id)}
+                onDragEnd={handleDragEnd}
+                className="rounded-lg bg-background/95 shadow-lg border p-1 cursor-move hover:bg-accent"
+                title="Déplacer"
+              >
+                <GripVertical className="size-4" />
+              </div>
               <div className="rounded-lg bg-background/95 shadow-lg border p-1 flex gap-1">
                 <Button
                   variant="ghost"

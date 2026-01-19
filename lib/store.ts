@@ -185,6 +185,7 @@ export const defaultState: AppState = {
   ],
   sleepLogs: [],
   workoutSessions: [],
+  workoutPrograms: [],
   personalRecords: [],
   fitnessProfile: null,
   dailyNutrition: [],
@@ -354,6 +355,18 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       }
     case "DELETE_WORKOUT":
       return { ...state, workoutSessions: state.workoutSessions.filter((w) => w.id !== action.payload) }
+    
+    case "ADD_WORKOUT_PROGRAM":
+      return { ...state, workoutPrograms: [...state.workoutPrograms, action.payload] }
+    case "UPDATE_WORKOUT_PROGRAM":
+      return {
+        ...state,
+        workoutPrograms: state.workoutPrograms.map((wp) =>
+          wp.id === action.payload.id ? action.payload : wp
+        ),
+      }
+    case "DELETE_WORKOUT_PROGRAM":
+      return { ...state, workoutPrograms: state.workoutPrograms.filter((wp) => wp.id !== action.payload) }
     
     case "ADD_PERSONAL_RECORD":
       return { ...state, personalRecords: [...state.personalRecords, action.payload] }

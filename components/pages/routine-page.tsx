@@ -227,7 +227,7 @@ export function RoutinePage() {
           <DialogTrigger asChild>
             <Button>
               <Plus className="size-4 mr-2" />
-              Nouvelle action
+              Ajouter une action
             </Button>
           </DialogTrigger>
           <DialogContent>

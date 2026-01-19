@@ -196,15 +196,10 @@ export function RoutineNightPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Moon className="size-8" />
-            Routine du soir
-          </h1>
-          <p className="text-muted-foreground">
-            Terminez votre journée en beauté
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight">Routine du soir</h1>
+          <p className="text-muted-foreground">Terminez votre journée en beauté</p>
         </div>
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
