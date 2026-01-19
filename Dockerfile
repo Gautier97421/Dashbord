@@ -1,8 +1,11 @@
-FROM node:20-alpine AS base
+FROM node:20-bullseye-slim AS base
 
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
+# Install dependencies needed for Prisma native engines (OpenSSL)
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends openssl ca-certificates \
+	&& rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # Install pnpm
@@ -24,7 +27,8 @@ COPY . .
 RUN npm install -g pnpm
 
 # Generate Prisma Client (after copying all files including prisma/)
-RUN npx prisma generate
+# Use a dummy DATABASE_URL for the build stage since Prisma 7 requires it in config
+RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma generate
 
 # Build the application
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -45,8 +49,7 @@ RUN npm install -g pnpm
 
 # Copy Prisma files first
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy built application
 COPY --from=builder /app/public ./public

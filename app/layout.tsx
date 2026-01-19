@@ -2,7 +2,7 @@ import React from "react"
 import type { Metadata } from 'next'
 import { Source_Serif_4, Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-// import { AuthProvider } from "@/components/auth-provider"
+import { AuthProvider } from "@/components/auth-provider"
 import './globals.css'
 
 const _sourceSerif = Source_Serif_4({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
@@ -40,7 +40,9 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body className={`font-sans antialiased`}>
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
         <Analytics />
       </body>
     </html>
