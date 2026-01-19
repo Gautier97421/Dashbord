@@ -318,14 +318,11 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
-            <strong>ProductivityPro</strong> - Votre assistant de productivité personnelle
+            <strong>SoloLeveling</strong> - Votre assistant de productivité personnelle
           </p>
           <p>
             Conçu pour vous aider à construire de meilleures habitudes, gérer vos projets
             et atteindre vos objectifs.
-          </p>
-          <p className="pt-2">
-            &ldquo;Discipline = Liberté&rdquo;
           </p>
         </CardContent>
       </Card>

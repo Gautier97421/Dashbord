@@ -5,6 +5,7 @@ import React from "react"
 import { createContext, useContext } from "react"
 import type {
   AppState,
+  AppAction,
   RoutineAction,
   RoutineLog,
   Task,
@@ -128,6 +129,12 @@ export const defaultState: AppState = {
     { id: "5", name: "Healthy Breakfast", category: "health", importance: "high", createdAt: new Date().toISOString() },
   ],
   routineLogs: [],
+  nightRoutineActions: [
+    { id: "n1", name: "Lecture", importance: "medium", createdAt: new Date().toISOString() },
+    { id: "n2", name: "Préparation du lendemain", importance: "high", createdAt: new Date().toISOString() },
+    { id: "n3", name: "Étirements", importance: "medium", createdAt: new Date().toISOString() },
+  ],
+  nightRoutineLogs: [],
   tasks: [],
   missions: [
     {
@@ -176,10 +183,26 @@ export const defaultState: AppState = {
       hidden: false,
     },
   ],
+  sleepLogs: [],
+  workoutSessions: [],
+  personalRecords: [],
+  fitnessProfile: null,
+  dailyNutrition: [],
+  dashboardWidgets: [
+    { id: "1", type: "routine-progress", enabled: true, order: 0, width: 1, height: 1 },
+    { id: "2", type: "missions-stats", enabled: true, order: 1, width: 1, height: 1 },
+    { id: "3", type: "tasks-stats", enabled: true, order: 2, width: 1, height: 1 },
+    { id: "4", type: "projects-stats", enabled: true, order: 3, width: 1, height: 1 },
+    { id: "5", type: "routine-list", enabled: true, order: 4, width: 2, height: 1 },
+    { id: "6", type: "today-missions", enabled: true, order: 5, width: 2, height: 1 },
+    { id: "7", type: "week-missions", enabled: true, order: 6, width: 2, height: 1 },
+    { id: "8", type: "active-projects", enabled: true, order: 7, width: 2, height: 1 },
+  ],
   settings: defaultSettings,
 }
 
 export type AppAction =
+  | { type: "LOAD_STATE"; payload: AppState }
   | { type: "ADD_ROUTINE_ACTION"; payload: RoutineAction }
   | { type: "UPDATE_ROUTINE_ACTION"; payload: RoutineAction }
   | { type: "DELETE_ROUTINE_ACTION"; payload: string }
@@ -202,6 +225,8 @@ export type AppAction =
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
+    case "LOAD_STATE":
+      return { ...state, ...action.payload }
     case "ADD_ROUTINE_ACTION":
       return { ...state, routineActions: [...state.routineActions, action.payload] }
     case "UPDATE_ROUTINE_ACTION":
@@ -216,6 +241,11 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         routineActions: state.routineActions.filter((a) => a.id !== action.payload),
       }
+    case "REORDER_ROUTINE_ACTIONS":
+      return {
+        ...state,
+        routineActions: action.payload,
+      }
     case "LOG_ROUTINE":
       const existingLogIndex = state.routineLogs.findIndex(
         (l) => l.actionId === action.payload.actionId && l.date === action.payload.date
@@ -226,6 +256,37 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         return { ...state, routineLogs: newLogs }
       }
       return { ...state, routineLogs: [...state.routineLogs, action.payload] }
+    
+    case "ADD_NIGHT_ROUTINE_ACTION":
+      return { ...state, nightRoutineActions: [...state.nightRoutineActions, action.payload] }
+    case "UPDATE_NIGHT_ROUTINE_ACTION":
+      return {
+        ...state,
+        nightRoutineActions: state.nightRoutineActions.map((a) =>
+          a.id === action.payload.id ? action.payload : a
+        ),
+      }
+    case "DELETE_NIGHT_ROUTINE_ACTION":
+      return {
+        ...state,
+        nightRoutineActions: state.nightRoutineActions.filter((a) => a.id !== action.payload),
+      }
+    case "REORDER_NIGHT_ROUTINE_ACTIONS":
+      return {
+        ...state,
+        nightRoutineActions: action.payload,
+      }
+    case "LOG_NIGHT_ROUTINE":
+      const existingNightLogIndex = state.nightRoutineLogs.findIndex(
+        (l) => l.actionId === action.payload.actionId && l.date === action.payload.date
+      )
+      if (existingNightLogIndex >= 0) {
+        const newLogs = [...state.nightRoutineLogs]
+        newLogs[existingNightLogIndex] = action.payload
+        return { ...state, nightRoutineLogs: newLogs }
+      }
+      return { ...state, nightRoutineLogs: [...state.nightRoutineLogs, action.payload] }
+    
     case "ADD_TASK":
       return { ...state, tasks: [...state.tasks, action.payload] }
     case "UPDATE_TASK":
@@ -271,6 +332,59 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         calendarEvents: state.calendarEvents.filter((e) => e.id !== action.payload),
       }
+    
+    case "ADD_SLEEP_LOG":
+      return { ...state, sleepLogs: [...state.sleepLogs, action.payload] }
+    case "UPDATE_SLEEP_LOG":
+      return {
+        ...state,
+        sleepLogs: state.sleepLogs.map((s) => (s.id === action.payload.id ? action.payload : s)),
+      }
+    case "DELETE_SLEEP_LOG":
+      return { ...state, sleepLogs: state.sleepLogs.filter((s) => s.id !== action.payload) }
+    
+    case "ADD_WORKOUT":
+      return { ...state, workoutSessions: [...state.workoutSessions, action.payload] }
+    case "UPDATE_WORKOUT":
+      return {
+        ...state,
+        workoutSessions: state.workoutSessions.map((w) =>
+          w.id === action.payload.id ? action.payload : w
+        ),
+      }
+    case "DELETE_WORKOUT":
+      return { ...state, workoutSessions: state.workoutSessions.filter((w) => w.id !== action.payload) }
+    
+    case "ADD_PERSONAL_RECORD":
+      return { ...state, personalRecords: [...state.personalRecords, action.payload] }
+    case "UPDATE_PERSONAL_RECORD":
+      return {
+        ...state,
+        personalRecords: state.personalRecords.map((pr) =>
+          pr.id === action.payload.id ? action.payload : pr
+        ),
+      }
+    case "DELETE_PERSONAL_RECORD":
+      return { ...state, personalRecords: state.personalRecords.filter((pr) => pr.id !== action.payload) }
+    
+    case "UPDATE_FITNESS_PROFILE":
+      return { ...state, fitnessProfile: action.payload }
+    
+    case "ADD_DAILY_NUTRITION":
+      return { ...state, dailyNutrition: [...state.dailyNutrition, action.payload] }
+    case "UPDATE_DAILY_NUTRITION":
+      return {
+        ...state,
+        dailyNutrition: state.dailyNutrition.map((n) =>
+          n.id === action.payload.id ? action.payload : n
+        ),
+      }
+    case "DELETE_DAILY_NUTRITION":
+      return { ...state, dailyNutrition: state.dailyNutrition.filter((n) => n.id !== action.payload) }
+    
+    case "UPDATE_DASHBOARD_WIDGETS":
+      return { ...state, dashboardWidgets: action.payload }
+    
     case "UPDATE_SETTINGS":
       return { ...state, settings: { ...state.settings, ...action.payload } }
     case "LIKE_INSIGHT":

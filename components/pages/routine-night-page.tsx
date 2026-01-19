@@ -28,20 +28,13 @@ import {
   Edit,
   ChevronLeft,
   ChevronRight,
+  Moon,
   GripVertical,
 } from "lucide-react"
 import { useApp } from "@/lib/store"
 import { generateId, getToday, formatDateFr, calculateStreak } from "@/lib/store"
-import type { RoutineAction, RoutineCategory, Priority } from "@/lib/types"
+import type { NightRoutineAction, Priority } from "@/lib/types"
 import { cn } from "@/lib/utils"
-
-const CATEGORIES: { value: RoutineCategory; label: string }[] = [
-  { value: "health", label: "Santé" },
-  { value: "sport", label: "Sport" },
-  { value: "mental", label: "Mental" },
-  { value: "work", label: "Travail" },
-  { value: "personal", label: "Personnel" },
-]
 
 const PRIORITIES: { value: Priority; label: string }[] = [
   { value: "low", label: "Basse" },
@@ -49,13 +42,12 @@ const PRIORITIES: { value: Priority; label: string }[] = [
   { value: "high", label: "Haute" },
 ]
 
-export function RoutinePage() {
+export function RoutineNightPage() {
   const { state, dispatch } = useApp()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingAction, setEditingAction] = useState<RoutineAction | null>(null)
-  const [newAction, setNewAction] = useState<Partial<RoutineAction>>({
+  const [editingAction, setEditingAction] = useState<NightRoutineAction | null>(null)
+  const [newAction, setNewAction] = useState<Partial<NightRoutineAction>>({
     name: "",
-    category: "personal",
     importance: "medium",
   })
   const [selectedWeek, setSelectedWeek] = useState(0) // 0 = current week
@@ -65,15 +57,15 @@ export function RoutinePage() {
   const today = getToday()
 
   const todayLogs = useMemo(() => {
-    return state.routineLogs.filter((l) => l.date === today)
-  }, [state.routineLogs, today])
+    return state.nightRoutineLogs.filter((l) => l.date === today)
+  }, [state.nightRoutineLogs, today])
 
   const routineProgress = useMemo(() => {
-    const total = state.routineActions.length
+    const total = state.nightRoutineActions.length
     if (total === 0) return 0
     const completed = todayLogs.filter((l) => l.completed).length
     return Math.round((completed / total) * 100)
-  }, [state.routineActions.length, todayLogs])
+  }, [state.nightRoutineActions.length, todayLogs])
 
   // Get week dates for the calendar view
   const weekDates = useMemo(() => {
@@ -95,12 +87,12 @@ export function RoutinePage() {
 
   const toggleRoutine = (actionId: string, date?: string) => {
     const targetDate = date || today
-    const existingLog = state.routineLogs.find(
+    const existingLog = state.nightRoutineLogs.find(
       (l) => l.actionId === actionId && l.date === targetDate
     )
 
     dispatch({
-      type: "LOG_ROUTINE",
+      type: "LOG_NIGHT_ROUTINE",
       payload: {
         id: existingLog?.id || generateId(),
         actionId,
@@ -115,34 +107,32 @@ export function RoutinePage() {
 
     if (editingAction) {
       dispatch({
-        type: "UPDATE_ROUTINE_ACTION",
+        type: "UPDATE_NIGHT_ROUTINE_ACTION",
         payload: {
           ...editingAction,
           name: newAction.name!,
-          category: newAction.category!,
           importance: newAction.importance!,
         },
       })
     } else {
       dispatch({
-        type: "ADD_ROUTINE_ACTION",
+        type: "ADD_NIGHT_ROUTINE_ACTION",
         payload: {
           id: generateId(),
           name: newAction.name!,
-          category: newAction.category!,
           importance: newAction.importance!,
           createdAt: new Date().toISOString(),
         },
       })
     }
 
-    setNewAction({ name: "", category: "personal", importance: "medium" })
+    setNewAction({ name: "", importance: "medium" })
     setEditingAction(null)
     setIsDialogOpen(false)
   }
 
   const handleDeleteAction = (id: string) => {
-    dispatch({ type: "DELETE_ROUTINE_ACTION", payload: id })
+    dispatch({ type: "DELETE_NIGHT_ROUTINE_ACTION", payload: id })
   }
 
   const handleDragStart = (e: React.DragEvent, actionId: string) => {
@@ -170,117 +160,88 @@ export function RoutinePage() {
       return
     }
 
-    const draggedIndex = state.routineActions.findIndex((a) => a.id === draggedAction)
-    const targetIndex = state.routineActions.findIndex((a) => a.id === targetActionId)
+    const draggedIndex = state.nightRoutineActions.findIndex((a) => a.id === draggedAction)
+    const targetIndex = state.nightRoutineActions.findIndex((a) => a.id === targetActionId)
 
     if (draggedIndex === -1 || targetIndex === -1) return
 
-    const newActions = [...state.routineActions]
+    const newActions = [...state.nightRoutineActions]
     const [removed] = newActions.splice(draggedIndex, 1)
     newActions.splice(targetIndex, 0, removed)
 
-    dispatch({ type: "REORDER_ROUTINE_ACTIONS", payload: newActions })
+    dispatch({ type: "REORDER_NIGHT_ROUTINE_ACTIONS", payload: newActions })
     setDraggedAction(null)
     setDragOverAction(null)
   }
 
-  const openEditDialog = (action: RoutineAction) => {
+  const openEditDialog = (action: NightRoutineAction) => {
     setEditingAction(action)
     setNewAction({
       name: action.name,
-      category: action.category,
       importance: action.importance,
     })
     setIsDialogOpen(true)
   }
 
-  const getCategoryColor = (category: RoutineCategory) => {
-    const colors: Record<RoutineCategory, string> = {
-      health: "bg-green-500/10 text-green-600 border-green-500/30",
-      sport: "bg-blue-500/10 text-blue-600 border-blue-500/30",
-      mental: "bg-purple-500/10 text-purple-600 border-purple-500/30",
-      work: "bg-orange-500/10 text-orange-600 border-orange-500/30",
-      personal: "bg-pink-500/10 text-pink-600 border-pink-500/30",
+  const getPriorityColor = (priority: Priority) => {
+    switch (priority) {
+      case "high":
+        return "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"
+      case "medium":
+        return "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20"
+      case "low":
+        return "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20"
     }
-    return colors[category]
-  }
-
-  const isLoggedForDate = (actionId: string, date: string) => {
-    return state.routineLogs.some((l) => l.actionId === actionId && l.date === date && l.completed)
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Routine matinale</h1>
-          <p className="text-muted-foreground">Construisez vos habitudes, une action à la fois</p>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Moon className="size-8" />
+            Routine du soir
+          </h1>
+          <p className="text-muted-foreground">
+            Terminez votre journée en beauté
+          </p>
         </div>
 
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open)
-          if (!open) {
-            setEditingAction(null)
-            setNewAction({ name: "", category: "personal", importance: "medium" })
-          }
-        }}>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={() => { setEditingAction(null); setNewAction({ name: "", importance: "medium" }) }}>
               <Plus className="size-4 mr-2" />
-              Nouvelle action
+              Ajouter une action
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editingAction ? "Modifier l'action" : "Nouvelle action"}</DialogTitle>
+              <DialogTitle>
+                {editingAction ? "Modifier l'action" : "Nouvelle action"}
+              </DialogTitle>
               <DialogDescription>
-                {editingAction
-                  ? "Modifiez les détails de cette action"
-                  : "Ajoutez une nouvelle action à votre routine matinale"}
+                Ajoutez une nouvelle action à votre routine du soir
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4">
+            <div className="space-y-4 py-4">
               <div>
-                <Label htmlFor="name">Nom de l&apos;action</Label>
+                <Label htmlFor="name">Nom de l'action</Label>
                 <Input
                   id="name"
-                  placeholder="Ex: Méditation 10 min"
-                  value={newAction.name}
+                  placeholder="Ex: Préparer les affaires du lendemain"
+                  value={newAction.name || ""}
                   onChange={(e) => setNewAction({ ...newAction, name: e.target.value })}
                 />
               </div>
 
               <div>
-                <Label>Catégorie</Label>
+                <Label htmlFor="importance">Importance</Label>
                 <Select
-                  value={newAction.category}
-                  onValueChange={(value: RoutineCategory) =>
-                    setNewAction({ ...newAction, category: value })
-                  }
+                  value={newAction.importance || "medium"}
+                  onValueChange={(value: Priority) => setNewAction({ ...newAction, importance: value })}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((cat) => (
-                      <SelectItem key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Importance</Label>
-                <Select
-                  value={newAction.importance}
-                  onValueChange={(value: Priority) =>
-                    setNewAction({ ...newAction, importance: value })
-                  }
-                >
-                  <SelectTrigger>
+                  <SelectTrigger id="importance">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -314,17 +275,17 @@ export function RoutinePage() {
             Aujourd&apos;hui - {formatDateFr(today, "full")}
           </CardTitle>
           <CardDescription>
-            {todayLogs.filter((l) => l.completed).length} / {state.routineActions.length} actions complétées
+            {todayLogs.filter((l) => l.completed).length} / {state.nightRoutineActions.length} actions complétées
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Progress value={routineProgress} className="h-3 mb-6" />
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {state.routineActions.map((action) => {
+            {state.nightRoutineActions.map((action) => {
               const log = todayLogs.find((l) => l.actionId === action.id)
               const isCompleted = log?.completed || false
-              const streak = calculateStreak(state.routineLogs, action.id)
+              const streak = calculateStreak(state.nightRoutineLogs, action.id)
 
               return (
                 <div
@@ -356,8 +317,8 @@ export function RoutinePage() {
                         {action.name}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="outline" className={getCategoryColor(action.category)}>
-                          {CATEGORIES.find((c) => c.value === action.category)?.label}
+                        <Badge variant="outline" className={getPriorityColor(action.importance)}>
+                          {PRIORITIES.find((c) => c.value === action.importance)?.label}
                         </Badge>
                         {streak.current > 0 && (
                           <div className="flex items-center gap-1 text-orange-500">
@@ -398,9 +359,9 @@ export function RoutinePage() {
             })}
           </div>
 
-          {state.routineActions.length === 0 && (
+          {state.nightRoutineActions.length === 0 && (
             <p className="text-center text-muted-foreground py-8">
-              Aucune action dans votre routine. Commencez par en ajouter une !
+              Aucune action dans votre routine du soir. Commencez par en ajouter une !
             </p>
           )}
         </CardContent>
@@ -472,14 +433,16 @@ export function RoutinePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {state.routineActions.map((action) => (
+                    {state.nightRoutineActions.map((action) => (
                       <tr key={action.id} className="border-t">
                         <td className="p-2">
                           <span className="text-sm font-medium">{action.name}</span>
                         </td>
                         {weekDates.map((date) => {
                           const dateStr = date.toISOString().split("T")[0]
-                          const isLogged = isLoggedForDate(action.id, dateStr)
+                          const isLogged = state.nightRoutineLogs.some(
+                            (l) => l.actionId === action.id && l.date === dateStr && l.completed
+                          )
                           const isPast = dateStr < today
                           const isToday = dateStr === today
 
@@ -521,25 +484,25 @@ export function RoutinePage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-lg border p-4 text-center">
                   <p className="text-3xl font-bold text-primary">
-                    {state.routineLogs.filter((l) => l.completed).length}
+                    {state.nightRoutineLogs.filter((l) => l.completed).length}
                   </p>
                   <p className="text-sm text-muted-foreground">Actions complétées</p>
                 </div>
                 <div className="rounded-lg border p-4 text-center">
                   <p className="text-3xl font-bold text-success">
-                    {Math.max(...state.routineActions.map((a) => calculateStreak(state.routineLogs, a.id).longest), 0)}
+                    {Math.max(...state.nightRoutineActions.map((a) => calculateStreak(state.nightRoutineLogs, a.id).longest), 0)}
                   </p>
                   <p className="text-sm text-muted-foreground">Plus longue série</p>
                 </div>
                 <div className="rounded-lg border p-4 text-center">
                   <p className="text-3xl font-bold text-orange-500">
-                    {state.routineActions.filter((a) => calculateStreak(state.routineLogs, a.id).current > 0).length}
+                    {state.nightRoutineActions.filter((a) => calculateStreak(state.nightRoutineLogs, a.id).current > 0).length}
                   </p>
                   <p className="text-sm text-muted-foreground">Séries actives</p>
                 </div>
                 <div className="rounded-lg border p-4 text-center">
                   <p className="text-3xl font-bold">
-                    {state.routineActions.length}
+                    {state.nightRoutineActions.length}
                   </p>
                   <p className="text-sm text-muted-foreground">Actions dans la routine</p>
                 </div>

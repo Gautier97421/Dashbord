@@ -2,15 +2,17 @@ import React from "react"
 import type { Metadata } from 'next'
 import { Source_Serif_4, Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+// import { AuthProvider } from "@/components/auth-provider"
 import './globals.css'
 
 const _sourceSerif = Source_Serif_4({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 const _inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'ProductivityPro - Dashboard de productivité personnelle',
-  description: 'Organisez votre journée, suivez vos habitudes et atteignez vos objectifs avec ProductivityPro.',
-  generator: 'v0.app',
+  //DailyQuest
+  title: 'SoloLeveling - Dashboard de productivité personnelle',
+  description: 'Organisez vos journée, suivez vos habitudes et atteignez vos objectifs.',
+  generator: 'app',
   icons: {
     icon: [
       {

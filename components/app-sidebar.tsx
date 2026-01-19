@@ -11,6 +11,9 @@ import {
   BarChart3,
   Settings,
   Zap,
+  Moon,
+  Dumbbell,
+  BedDouble,
 } from "lucide-react"
 import {
   Sidebar,
@@ -25,14 +28,17 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar"
 
-export type NavPage = "dashboard" | "calendar" | "routine" | "missions" | "projects" | "statistics" | "settings"
+export type NavPage = "dashboard" | "calendar" | "routine" | "routine-night" | "missions" | "projects" | "sport" | "sleep" | "statistics" | "settings"
 
 const navItems: { id: NavPage; label: string; icon: React.ElementType }[] = [
   { id: "dashboard", label: "Tableau de bord", icon: LayoutDashboard },
   { id: "calendar", label: "Calendrier", icon: Calendar },
   { id: "routine", label: "Routine matinale", icon: Sun },
+  { id: "routine-night", label: "Routine du soir", icon: Moon },
   { id: "missions", label: "Missions", icon: CheckSquare },
   { id: "projects", label: "Projets", icon: FolderKanban },
+  { id: "sport", label: "Sport & Nutrition", icon: Dumbbell },
+  { id: "sleep", label: "Sommeil", icon: BedDouble },
   { id: "statistics", label: "Statistiques", icon: BarChart3 },
   { id: "settings", label: "Paramètres", icon: Settings },
 ]
@@ -47,11 +53,15 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border p-4">
         <div className="flex items-center gap-2">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Zap className="size-4" />
+          <div className="flex items-center justify-center rounded-lg overflow-hidden w-16 h-16 shadow-md">
+            <img
+              src="/perso_grain.png"
+              alt="Perso"
+              className="scale-535 object-cover"
+            />
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-semibold">ProductivityPro</span>
+            <span className="text-sm font-semibold">Bonjour, Gautier</span>
             <span className="text-xs text-muted-foreground">Votre assistant quotidien</span>
           </div>
         </div>
@@ -79,11 +89,9 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-4">
-        <p className="text-xs text-muted-foreground text-center">
-          Discipline = Liberté
-        </p>
-      </SidebarFooter>
+      {/* <SidebarFooter className="border-t border-sidebar-border p-4">
+
+      </SidebarFooter> */}
     </Sidebar>
   )
 }

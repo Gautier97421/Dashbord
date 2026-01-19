@@ -8,8 +8,11 @@ import { Separator } from "@/components/ui/separator"
 import { DashboardPage } from "@/components/pages/dashboard-page"
 import { CalendarPage } from "@/components/pages/calendar-page"
 import { RoutinePage } from "@/components/pages/routine-page"
+import { RoutineNightPage } from "@/components/pages/routine-night-page"
 import { MissionsPage } from "@/components/pages/missions-page"
 import { ProjectsPage } from "@/components/pages/projects-page"
+import { SportPage } from "@/components/pages/sport-page"
+import { SleepPage } from "@/components/pages/sleep-page"
 import { StatisticsPage } from "@/components/pages/statistics-page"
 import { SettingsPage } from "@/components/pages/settings-page"
 
@@ -24,10 +27,16 @@ function DashboardLayout() {
         return <CalendarPage />
       case "routine":
         return <RoutinePage />
+      case "routine-night":
+        return <RoutineNightPage />
       case "missions":
         return <MissionsPage />
       case "projects":
         return <ProjectsPage />
+      case "sport":
+        return <SportPage />
+      case "sleep":
+        return <SleepPage />
       case "statistics":
         return <StatisticsPage />
       case "settings":
@@ -42,8 +51,11 @@ function DashboardLayout() {
       dashboard: "Tableau de bord",
       calendar: "Calendrier",
       routine: "Routine matinale",
+      "routine-night": "Routine du soir",
       missions: "Missions",
       projects: "Projets",
+      sport: "Sport & Nutrition",
+      sleep: "Sommeil",
       statistics: "Statistiques",
       settings: "Paramètres",
     }
@@ -51,7 +63,7 @@ function DashboardLayout() {
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <AppSidebar currentPage={currentPage} onNavigate={setCurrentPage} />
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">

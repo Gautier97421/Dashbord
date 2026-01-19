@@ -1,0 +1,212 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = "postgresql://postgres:postgres@127.0.0.1:5432/dashboard_db"
+}
+
+enum Priority {
+  low
+  medium
+  high
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  done
+}
+
+enum TimeFrame {
+  day
+  week
+  month
+  year
+}
+
+enum RoutineCategory {
+  health
+  sport
+  mental
+  work
+  personal
+}
+
+enum RecurrencePattern {
+  daily
+  weekly
+  monthly
+}
+
+enum InsightCategory {
+  productivity
+  health
+  motivation
+  funfact
+}
+
+enum Theme {
+  light
+  dark
+  system
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  routineActions RoutineAction[]
+  routineLogs    RoutineLog[]
+  tasks          Task[]
+  missions       Mission[]
+  projects       Project[]
+  calendarEvents CalendarEvent[]
+  dailyInsights  DailyInsight[]
+  settings       UserSettings?
+
+  @@map("users")
+}
+
+model UserSettings {
+  id              String  @id @default(cuid())
+  userId          String  @unique
+  theme           Theme   @default(system)
+  dayStartHour    Int     @default(6)
+  dayEndHour      Int     @default(22)
+  showRoutines    Boolean @default(true)
+  showStats       Boolean @default(true)
+  showDailyInsight Boolean @default(true)
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+model RoutineAction {
+  id         String           @id @default(cuid())
+  userId     String
+  name       String
+  category   RoutineCategory
+  importance Priority
+  createdAt  DateTime         @default(now())
+
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs RoutineLog[]
+
+  @@map("routine_actions")
+}
+
+model RoutineLog {
+  id        String   @id @default(cuid())
+  userId    String
+  actionId  String
+  date      DateTime @db.Date
+  completed Boolean
+
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action RoutineAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+
+  @@unique([actionId, date])
+  @@map("routine_logs")
+}
+
+model Task {
+  id          String      @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  priority    Priority
+  status      TaskStatus
+  dueDate     DateTime?
+  missionId   String?
+  projectId   String?
+  createdAt   DateTime    @default(now())
+  completedAt DateTime?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mission Mission? @relation(fields: [missionId], references: [id], onDelete: SetNull)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@map("tasks")
+}
+
+model Mission {
+  id          String      @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  timeFrame   TimeFrame
+  priority    Priority
+  status      TaskStatus
+  dueDate     DateTime?
+  createdAt   DateTime    @default(now())
+  completedAt DateTime?
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks          Task[]
+  calendarEvents CalendarEvent[]
+
+  @@map("missions")
+}
+
+model Project {
+  id          String    @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  objectives  String[]
+  deadline    DateTime?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks          Task[]
+  calendarEvents CalendarEvent[]
+
+  @@map("projects")
+}
+
+model CalendarEvent {
+  id                String              @id @default(cuid())
+  userId            String
+  title             String
+  date              DateTime            @db.Date
+  startTime         String?
+  endTime           String?
+  priority          Priority
+  isRecurring       Boolean             @default(false)
+  recurrencePattern RecurrencePattern?
+  missionId         String?
+  projectId         String?
+  completed         Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mission Mission? @relation(fields: [missionId], references: [id], onDelete: SetNull)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@map("calendar_events")
+}
+
+model DailyInsight {
+  id       String          @id @default(cuid())
+  userId   String
+  content  String
+  category InsightCategory
+  liked    Boolean         @default(false)
+  hidden   Boolean         @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("daily_insights")
+}
