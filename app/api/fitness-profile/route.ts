@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-// GET all projects
+// GET fitness profile
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
@@ -16,23 +16,18 @@ export async function GET() {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const projects = await prisma.project.findMany({
+    const profile = await prisma.fitnessProfile.findUnique({
       where: { userId: user.id },
-      include: {
-        tasks: true,
-        calendarEvents: true,
-      },
-      orderBy: { createdAt: 'desc' },
     })
     
-    return NextResponse.json(projects)
+    return NextResponse.json(profile)
   } catch (error) {
-    console.error('Error fetching projects:', error)
-    return NextResponse.json({ error: 'Failed to fetch projects' }, { status: 500 })
+    console.error('Error fetching fitness profile:', error)
+    return NextResponse.json({ error: 'Failed to fetch fitness profile' }, { status: 500 })
   }
 }
 
-// POST create a new project
+// POST/PUT create or update fitness profile (upsert)
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions)
@@ -46,30 +41,39 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { title, description, objectives, deadline } = body
+    const { age, weight, height, gender, goal, activityLevel, targetWeight } = body
 
-    const project = await prisma.project.create({
-      data: {
-        userId: user.id,
-        title,
-        description,
-        objectives: objectives || [],
-        deadline: deadline ? new Date(deadline) : undefined,
+    const profile = await prisma.fitnessProfile.upsert({
+      where: { userId: user.id },
+      update: {
+        age,
+        weight,
+        height,
+        gender,
+        goal,
+        activityLevel,
+        targetWeight,
       },
-      include: {
-        tasks: true,
-        calendarEvents: true,
+      create: {
+        userId: user.id,
+        age,
+        weight,
+        height,
+        gender,
+        goal,
+        activityLevel,
+        targetWeight,
       },
     })
 
-    return NextResponse.json(project, { status: 201 })
+    return NextResponse.json(profile)
   } catch (error) {
-    console.error('Error creating project:', error)
-    return NextResponse.json({ error: 'Failed to create project' }, { status: 500 })
+    console.error('Error saving fitness profile:', error)
+    return NextResponse.json({ error: 'Failed to save fitness profile' }, { status: 500 })
   }
 }
 
-// PUT update a project
+// PUT update fitness profile
 export async function PUT(request: Request) {
   try {
     const session = await getServerSession(authOptions)
@@ -83,32 +87,30 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json()
-    const { id, title, description, objectives, deadline, completedAt } = body
+    const { age, weight, height, gender, goal, activityLevel, targetWeight } = body
 
-    const project = await prisma.project.update({
-      where: { id },
+    const profile = await prisma.fitnessProfile.update({
+      where: { userId: user.id },
       data: {
-        title,
-        description,
-        objectives,
-        deadline: deadline ? new Date(deadline) : undefined,
-        completedAt: completedAt ? new Date(completedAt) : undefined,
-      },
-      include: {
-        tasks: true,
-        calendarEvents: true,
+        age,
+        weight,
+        height,
+        gender,
+        goal,
+        activityLevel,
+        targetWeight,
       },
     })
 
-    return NextResponse.json(project)
+    return NextResponse.json(profile)
   } catch (error) {
-    console.error('Error updating project:', error)
-    return NextResponse.json({ error: 'Failed to update project' }, { status: 500 })
+    console.error('Error updating fitness profile:', error)
+    return NextResponse.json({ error: 'Failed to update fitness profile' }, { status: 500 })
   }
 }
 
-// DELETE a project
-export async function DELETE(request: Request) {
+// DELETE fitness profile
+export async function DELETE() {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
@@ -120,20 +122,13 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get('id')
-
-    if (!id) {
-      return NextResponse.json({ error: 'ID is required' }, { status: 400 })
-    }
-
-    await prisma.project.delete({
-      where: { id },
+    await prisma.fitnessProfile.delete({
+      where: { userId: user.id },
     })
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting project:', error)
-    return NextResponse.json({ error: 'Failed to delete project' }, { status: 500 })
+    console.error('Error deleting fitness profile:', error)
+    return NextResponse.json({ error: 'Failed to delete fitness profile' }, { status: 500 })
   }
 }

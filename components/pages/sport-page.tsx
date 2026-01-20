@@ -15,7 +15,7 @@ import { Dumbbell, Plus, Trash2, TrendingUp, Apple, Trophy, User, Calendar as Ca
 import type { WorkoutSession, PersonalRecord, FitnessProfile, DailyNutrition, Meal, ActivityType, FitnessGoal, WorkoutProgram, WorkoutProgramSession, Mission, TimeFrame, Priority, TaskStatus } from "@/lib/types"
 
 export function SportPage() {
-  const { state, dispatch } = useApp()
+  const { state, dispatch, updateFitnessProfile } = useApp()
   const [activeTab, setActiveTab] = useState("workouts")
   const [showWorkoutForm, setShowWorkoutForm] = useState(false)
   const [showPRForm, setShowPRForm] = useState(false)
@@ -416,9 +416,13 @@ export function SportPage() {
     dispatch({ type: "DELETE_PERSONAL_RECORD", payload: id })
   }
 
-  const saveProfile = () => {
-    dispatch({ type: "UPDATE_FITNESS_PROFILE", payload: profileForm })
-    setShowProfileForm(false)
+  const saveProfile = async () => {
+    try {
+      await updateFitnessProfile(profileForm)
+      setShowProfileForm(false)
+    } catch (error) {
+      console.error('Error saving profile:', error)
+    }
   }
 
   const saveMeal = () => {

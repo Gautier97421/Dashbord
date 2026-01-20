@@ -143,3 +143,10 @@ export const calendarApi = {
   update: (event: any) => api.put('/calendar/events', event),
   delete: (id: string) => api.delete('/calendar/events', id),
 }
+
+export const fitnessProfileApi = {
+  get: () => api.get('/fitness-profile'),
+  createOrUpdate: (profile: any) => api.post('/fitness-profile', profile),
+  update: (profile: any) => api.put('/fitness-profile', profile),
+  delete: () => api.delete('/fitness-profile'),
+}

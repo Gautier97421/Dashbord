@@ -94,6 +94,8 @@ interface AppContextType {
   addCalendarEvent: (event: Omit<CalendarEvent, 'id'>) => Promise<void>
   updateCalendarEvent: (event: CalendarEvent) => Promise<void>
   deleteCalendarEvent: (id: string) => Promise<void>
+  // API actions for fitness profile
+  updateFitnessProfile: (profile: any) => Promise<void>
   // API actions for settings
   updateSettings: (settings: Partial<UserSettings>) => void
 }
@@ -234,6 +236,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case "DELETE_EVENT":
       return { ...state, calendarEvents: state.calendarEvents.filter(e => e.id !== action.payload) }
 
+    // Fitness Profile
+    case "UPDATE_FITNESS_PROFILE":
+      return { ...state, fitnessProfile: action.payload }
+
     // Settings
     case "UPDATE_SETTINGS":
       return { ...state, settings: { ...state.settings, ...action.payload } }
@@ -289,6 +295,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         workoutPrograms,
         dashboardWidgets,
         calendarEvents,
+        fitnessProfile,
       ] = await Promise.all([
         api.routinesApi.getActions().catch(() => []) as Promise<any[]>,
         api.routinesApi.getLogs().catch(() => []) as Promise<any[]>,
@@ -302,6 +309,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         api.workoutProgramsApi.getAll().catch(() => []) as Promise<any[]>,
         api.dashboardApi.getWidgets().catch(() => []) as Promise<any[]>,
         api.calendarApi.getAll().catch(() => []) as Promise<any[]>,
+        api.fitnessProfileApi.get().catch(() => null) as Promise<any>,
       ])
 
       // Transform Prisma data to match our types
@@ -442,6 +450,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
           projectId: event.projectId,
           completed: event.completed,
         })),
+        fitnessProfile: fitnessProfile ? {
+          id: fitnessProfile.id,
+          age: fitnessProfile.age,
+          weight: fitnessProfile.weight,
+          height: fitnessProfile.height,
+          gender: fitnessProfile.gender,
+          goal: fitnessProfile.goal,
+          activityLevel: fitnessProfile.activityLevel,
+          targetWeight: fitnessProfile.targetWeight,
+        } : null,
       }
 
       dispatch({ type: "LOAD_STATE", payload: transformedState as AppState })
@@ -799,6 +817,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "UPDATE_SETTINGS", payload: settings })
   }, [])
 
+  // Fitness Profile
+  const updateFitnessProfile = useCallback(async (profile: any) => {
+    try {
+      const updated = await api.fitnessProfileApi.createOrUpdate(profile)
+      dispatch({ type: "UPDATE_FITNESS_PROFILE", payload: updated })
+    } catch (error) {
+      console.error('Error updating fitness profile:', error)
+      throw error
+    }
+  }, [])
+
   const contextValue: AppContextType = {
     state,
     dispatch,
@@ -844,6 +873,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addCalendarEvent,
     updateCalendarEvent,
     deleteCalendarEvent,
+    // Fitness profile
+    updateFitnessProfile,
     // Settings
     updateSettings,
   }
