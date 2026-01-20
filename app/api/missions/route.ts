@@ -70,9 +70,20 @@ export async function POST(request: Request) {
 // PUT update a mission
 export async function PUT(request: Request) {
   try {
-    const body = await request.json()
-    const { id, title, description, timeFrame, priority, status, dueDate, completedAt } = body
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    const body = await request.json()
+    const { id, title, description, timeFrame, priority, status, dueDate, completedAt, tasks } = body
+
+    // Update mission
     const mission = await prisma.mission.update({
       where: { id },
       data: {
@@ -86,7 +97,36 @@ export async function PUT(request: Request) {
       },
     })
 
-    return NextResponse.json(mission)
+    // Handle tasks update if provided
+    if (tasks && Array.isArray(tasks)) {
+      // Delete existing tasks and recreate
+      await prisma.task.deleteMany({
+        where: { missionId: id },
+      })
+
+      // Create new tasks
+      if (tasks.length > 0) {
+        await prisma.task.createMany({
+          data: tasks.map((task: any) => ({
+            userId: user.id,
+            missionId: id,
+            title: task.title,
+            description: task.description,
+            priority: task.priority || 'medium',
+            status: task.status || 'todo',
+            dueDate: task.dueDate,
+          })),
+        })
+      }
+    }
+
+    // Return mission with tasks
+    const updatedMission = await prisma.mission.findUnique({
+      where: { id },
+      include: { tasks: true, calendarEvents: true },
+    })
+
+    return NextResponse.json(updatedMission)
   } catch (error) {
     console.error('Error updating mission:', error)
     return NextResponse.json({ error: 'Failed to update mission' }, { status: 500 })

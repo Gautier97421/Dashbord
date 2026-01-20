@@ -76,10 +76,10 @@ export function MissionsPage() {
 
   const missionsByTimeFrame = useMemo(() => {
     return {
-      day: state.missions.filter((m) => m.timeFrame === "day"),
-      week: state.missions.filter((m) => m.timeFrame === "week"),
-      month: state.missions.filter((m) => m.timeFrame === "month"),
-      year: state.missions.filter((m) => m.timeFrame === "year"),
+      day: (state.missions || []).filter((m) => m.timeFrame === "day"),
+      week: (state.missions || []).filter((m) => m.timeFrame === "week"),
+      month: (state.missions || []).filter((m) => m.timeFrame === "month"),
+      year: (state.missions || []).filter((m) => m.timeFrame === "year"),
     }
   }, [state.missions])
 
@@ -176,7 +176,7 @@ export function MissionsPage() {
   }
 
   const toggleSubtaskInMission = async (mission: Mission, taskId: string) => {
-    const updatedTasks = mission.tasks.map((t) =>
+    const updatedTasks = (mission.tasks || []).map((t) =>
       t.id === taskId
         ? { ...t, status: t.status === "done" ? "todo" : "done" as TaskStatus }
         : t
@@ -197,9 +197,10 @@ export function MissionsPage() {
   }
 
   const getMissionProgress = (mission: Mission) => {
-    if (mission.tasks.length === 0) return mission.status === "done" ? 100 : 0
-    const completed = mission.tasks.filter((t) => t.status === "done").length
-    return Math.round((completed / mission.tasks.length) * 100)
+    const tasks = mission.tasks || []
+    if (tasks.length === 0) return mission.status === "done" ? 100 : 0
+    const completed = tasks.filter((t) => t.status === "done").length
+    return Math.round((completed / tasks.length) * 100)
   }
 
   const renderMissionCard = (mission: Mission) => (
@@ -227,9 +228,9 @@ export function MissionsPage() {
               )}
 
               {/* Subtasks */}
-              {mission.tasks.length > 0 && (
+              {(mission.tasks || []).length > 0 && (
                 <div className="mt-3 space-y-1">
-                  {mission.tasks.slice(0, 3).map((task) => (
+                  {(mission.tasks || []).slice(0, 3).map((task) => (
                     <div
                       key={task.id}
                       className="flex items-center gap-2 text-sm"
@@ -249,16 +250,16 @@ export function MissionsPage() {
                       </span>
                     </div>
                   ))}
-                  {mission.tasks.length > 3 && (
+                  {(mission.tasks || []).length > 3 && (
                     <p className="text-xs text-muted-foreground ml-6">
-                      +{mission.tasks.length - 3} autres tâches
+                      +{(mission.tasks || []).length - 3} autres tâches
                     </p>
                   )}
                 </div>
               )}
 
               {/* Progress bar */}
-              {mission.tasks.length > 0 && (
+              {(mission.tasks || []).length > 0 && (
                 <div className="mt-3">
                   <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                     <span>Progression</span>

@@ -49,8 +49,7 @@ export async function POST(request: Request) {
 
     const log = await prisma.nightRoutineLog.upsert({
       where: {
-        userId_actionId_date: {
-          userId: user.id,
+        actionId_date: {
           actionId,
           date,
         },

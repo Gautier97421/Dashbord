@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { date, bedtime, wakeTime, duration, quality, notes } = body
+    const { date, bedTime, wakeTime, duration, quality, notes } = body
 
     const sleepLog = await prisma.sleepLog.upsert({
       where: {
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
         },
       },
       update: {
-        bedtime,
+        bedTime,
         wakeTime,
         duration,
         quality,
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       create: {
         userId: user.id,
         date,
-        bedtime,
+        bedTime,
         wakeTime,
         duration,
         quality,

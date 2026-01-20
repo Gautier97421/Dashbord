@@ -119,17 +119,17 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
 
   // Initialize widgets from store or defaults
   const [widgets, setWidgets] = useState<DashboardWidget[]>(
-    state.dashboardWidgets.length > 0 ? state.dashboardWidgets : DEFAULT_DASHBOARD_WIDGETS
+    (state.dashboardWidgets || []).length > 0 ? state.dashboardWidgets : DEFAULT_DASHBOARD_WIDGETS
   )
 
   // Sync widgets with store data (and seed defaults for new users)
   useEffect(() => {
-    if (state.dashboardWidgets.length > 0) {
+    if ((state.dashboardWidgets || []).length > 0) {
       setWidgets(state.dashboardWidgets)
       return
     }
 
-    if (!isLoading && state.dashboardWidgets.length === 0) {
+    if (!isLoading && (state.dashboardWidgets || []).length === 0) {
       setWidgets((prev) => {
         if (prev.length === 0) {
           updateDashboardWidgets(DEFAULT_DASHBOARD_WIDGETS)

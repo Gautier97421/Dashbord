@@ -136,3 +136,10 @@ export const dashboardApi = {
   getWidgets: () => api.get('/dashboard/widgets'),
   updateWidgets: (widgets: any[]) => api.put('/dashboard/widgets', { widgets }),
 }
+
+export const calendarApi = {
+  getAll: () => api.get('/calendar/events'),
+  create: (event: any) => api.post('/calendar/events', event),
+  update: (event: any) => api.put('/calendar/events', event),
+  delete: (id: string) => api.delete('/calendar/events', id),
+}

@@ -31,7 +31,7 @@ const MONTHS = [
 ]
 
 export function CalendarPage() {
-  const { state, dispatch } = useApp()
+  const { state, addCalendarEvent, updateCalendarEvent, deleteCalendarEvent } = useApp()
   const [viewMode, setViewMode] = useState<ViewMode>("month")
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
@@ -95,7 +95,7 @@ export function CalendarPage() {
 
   const getEventsForDate = (date: Date) => {
     const dateStr = date.toISOString().split("T")[0]
-    return state.calendarEvents.filter((e) => e.date === dateStr)
+    return (state.calendarEvents || []).filter((e) => e.date === dateStr)
   }
 
   const navigateMonth = (direction: number) => {
@@ -112,22 +112,18 @@ export function CalendarPage() {
     })
   }
 
-  const handleAddEvent = () => {
+  const handleAddEvent = async () => {
     if (!newEvent.title || !selectedDate) return
 
-    dispatch({
-      type: "ADD_EVENT",
-      payload: {
-        id: generateId(),
-        title: newEvent.title,
-        date: selectedDate,
-        startTime: newEvent.startTime,
-        endTime: newEvent.endTime,
-        priority: newEvent.priority || "medium",
-        isRecurring: newEvent.isRecurring || false,
-        recurrencePattern: newEvent.recurrencePattern,
-        completed: false,
-      },
+    await addCalendarEvent({
+      title: newEvent.title,
+      date: selectedDate,
+      startTime: newEvent.startTime,
+      endTime: newEvent.endTime,
+      priority: newEvent.priority || "medium",
+      isRecurring: newEvent.isRecurring || false,
+      recurrencePattern: newEvent.recurrencePattern,
+      completed: false,
     })
 
     setNewEvent({
@@ -139,18 +135,15 @@ export function CalendarPage() {
     setIsDialogOpen(false)
   }
 
-  const toggleEventComplete = (eventId: string) => {
-    const event = state.calendarEvents.find((e) => e.id === eventId)
+  const toggleEventComplete = async (eventId: string) => {
+    const event = (state.calendarEvents || []).find((e) => e.id === eventId)
     if (event) {
-      dispatch({
-        type: "UPDATE_EVENT",
-        payload: { ...event, completed: !event.completed },
-      })
+      await updateCalendarEvent({ ...event, completed: !event.completed })
     }
   }
 
-  const deleteEvent = (eventId: string) => {
-    dispatch({ type: "DELETE_EVENT", payload: eventId })
+  const deleteEvent = async (eventId: string) => {
+    await deleteCalendarEvent(eventId)
   }
 
   const getPriorityColor = (priority: Priority) => {
@@ -390,44 +383,151 @@ export function CalendarPage() {
                 const isToday = dateStr === today
 
                 return (
-                  <div
-                    key={dateStr}
-                    className={cn(
-                      "min-h-[200px] rounded-lg border p-2",
-                      isToday && "border-primary bg-primary/5"
-                    )}
-                  >
-                    <div className="text-center mb-2">
-                      <p className="text-xs text-muted-foreground">{DAYS[weekDays.indexOf(date)]}</p>
-                      <p
+                  <Dialog key={dateStr} open={isDialogOpen && selectedDate === dateStr} onOpenChange={(open) => {
+                    if (open) {
+                      setSelectedDate(dateStr)
+                    }
+                    setIsDialogOpen(open)
+                  }}>
+                    <DialogTrigger asChild>
+                      <div
                         className={cn(
-                          "text-lg font-medium",
-                          isToday && "text-primary"
+                          "min-h-[200px] rounded-lg border p-2 cursor-pointer hover:bg-muted/50",
+                          isToday && "border-primary bg-primary/5"
                         )}
+                        onClick={() => setSelectedDate(dateStr)}
                       >
-                        {date.getDate()}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      {events.map((event) => (
-                        <div
-                          key={event.id}
-                          className={cn(
-                            "rounded p-2 text-xs cursor-pointer",
-                            event.completed
-                              ? "bg-muted text-muted-foreground line-through"
-                              : getPriorityColor(event.priority)
-                          )}
-                          onClick={() => toggleEventComplete(event.id)}
-                        >
-                          {event.startTime && (
-                            <span className="font-medium">{event.startTime} - </span>
-                          )}
-                          {event.title}
+                        <div className="text-center mb-2">
+                          <p className="text-xs text-muted-foreground">{DAYS[weekDays.indexOf(date)]}</p>
+                          <p
+                            className={cn(
+                              "text-lg font-medium",
+                              isToday && "text-primary"
+                            )}
+                          >
+                            {date.getDate()}
+                          </p>
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                        <div className="space-y-1">
+                          {events.map((event) => (
+                            <div
+                              key={event.id}
+                              className={cn(
+                                "rounded p-2 text-xs",
+                                event.completed
+                                  ? "bg-muted text-muted-foreground line-through"
+                                  : getPriorityColor(event.priority)
+                              )}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                toggleEventComplete(event.id)
+                              }}
+                            >
+                              {event.startTime && (
+                                <span className="font-medium">{event.startTime} - </span>
+                              )}
+                              {event.title}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>{formatDateFr(dateStr, "full")}</DialogTitle>
+                        <DialogDescription>
+                          Gérez les événements de cette journée
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      {/* Existing events */}
+                      {events.length > 0 && (
+                        <div className="space-y-2">
+                          <Label>Événements</Label>
+                          {events.map((event) => (
+                            <div
+                              key={event.id}
+                              className="flex items-center justify-between rounded-lg border p-3"
+                            >
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => toggleEventComplete(event.id)}>
+                                  {event.completed ? (
+                                    <CheckCircle2 className="size-5 text-success" />
+                                  ) : (
+                                    <Clock className="size-5 text-muted-foreground" />
+                                  )}
+                                </button>
+                                <span className={event.completed ? "line-through text-muted-foreground" : ""}>
+                                  {event.title}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline">{event.priority}</Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => deleteEvent(event.id)}
+                                  className="text-destructive"
+                                >
+                                  Supprimer
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Add new event */}
+                      <div className="space-y-4 border-t pt-4">
+                        <Label>Nouvel événement</Label>
+                        <Input
+                          placeholder="Titre de l'événement"
+                          value={newEvent.title}
+                          onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+                        />
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label>Heure de début</Label>
+                            <Input
+                              type="time"
+                              value={newEvent.startTime || ""}
+                              onChange={(e) => setNewEvent({ ...newEvent, startTime: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <Label>Heure de fin</Label>
+                            <Input
+                              type="time"
+                              value={newEvent.endTime || ""}
+                              onChange={(e) => setNewEvent({ ...newEvent, endTime: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <Label>Priorité</Label>
+                          <Select
+                            value={newEvent.priority}
+                            onValueChange={(value: Priority) => setNewEvent({ ...newEvent, priority: value })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="low">Basse</SelectItem>
+                              <SelectItem value="medium">Moyenne</SelectItem>
+                              <SelectItem value="high">Haute</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <DialogFooter>
+                        <Button onClick={handleAddEvent} disabled={!newEvent.title}>
+                          Ajouter l'événement
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 )
               })}
             </div>
@@ -438,8 +538,80 @@ export function CalendarPage() {
       {/* Day View */}
       {viewMode === "day" && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>{formatDateFr(currentDate, "full")}</CardTitle>
+            <Dialog open={isDialogOpen && selectedDate === currentDate.toISOString().split("T")[0]} onOpenChange={(open) => {
+              if (open) {
+                setSelectedDate(currentDate.toISOString().split("T")[0])
+              }
+              setIsDialogOpen(open)
+            }}>
+              <DialogTrigger asChild>
+                <Button size="sm" onClick={() => setSelectedDate(currentDate.toISOString().split("T")[0])}>
+                  <Plus className="size-4 mr-2" />
+                  Ajouter un événement
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Nouvel événement</DialogTitle>
+                  <DialogDescription>
+                    Ajouter un événement pour le {formatDateFr(currentDate, "full")}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                  <div>
+                    <Label>Titre</Label>
+                    <Input
+                      placeholder="Titre de l'événement"
+                      value={newEvent.title}
+                      onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Heure de début</Label>
+                      <Input
+                        type="time"
+                        value={newEvent.startTime || ""}
+                        onChange={(e) => setNewEvent({ ...newEvent, startTime: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label>Heure de fin</Label>
+                      <Input
+                        type="time"
+                        value={newEvent.endTime || ""}
+                        onChange={(e) => setNewEvent({ ...newEvent, endTime: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Priorité</Label>
+                    <Select
+                      value={newEvent.priority}
+                      onValueChange={(value: Priority) => setNewEvent({ ...newEvent, priority: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Basse</SelectItem>
+                        <SelectItem value="medium">Moyenne</SelectItem>
+                        <SelectItem value="high">Haute</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button onClick={handleAddEvent} disabled={!newEvent.title}>
+                    Ajouter l'événement
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </CardHeader>
           <CardContent className="space-y-4">
             {(() => {

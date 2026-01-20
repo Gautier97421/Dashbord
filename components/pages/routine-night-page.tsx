@@ -61,11 +61,11 @@ export function RoutineNightPage() {
   }, [state.nightRoutineLogs, today])
 
   const routineProgress = useMemo(() => {
-    const total = state.nightRoutineActions.length
+    const total = state.nightRoutineActions?.length || 0
     if (total === 0) return 0
     const completed = todayLogs.filter((l) => l.completed).length
     return Math.round((completed / total) * 100)
-  }, [state.nightRoutineActions.length, todayLogs])
+  }, [state.nightRoutineActions, todayLogs])
 
   // Get week dates for the calendar view
   const weekDates = useMemo(() => {
@@ -254,14 +254,14 @@ export function RoutineNightPage() {
             Aujourd&apos;hui - {formatDateFr(today, "full")}
           </CardTitle>
           <CardDescription>
-            {todayLogs.filter((l) => l.completed).length} / {state.nightRoutineActions.length} actions complétées
+            {todayLogs.filter((l) => l.completed).length} / {state.nightRoutineActions?.length || 0} actions complétées
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Progress value={routineProgress} className="h-3 mb-6" />
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {state.nightRoutineActions.map((action) => {
+            {(state.nightRoutineActions || []).map((action) => {
               const log = todayLogs.find((l) => l.actionId === action.id)
               const isCompleted = log?.completed || false
               const streak = calculateStreak(state.nightRoutineLogs, action.id)
@@ -338,7 +338,7 @@ export function RoutineNightPage() {
             })}
           </div>
 
-          {state.nightRoutineActions.length === 0 && (
+          {(!state.nightRoutineActions || state.nightRoutineActions.length === 0) && (
             <p className="text-center text-muted-foreground py-8">
               Aucune action dans votre routine du soir. Commencez par en ajouter une !
             </p>
@@ -412,7 +412,7 @@ export function RoutineNightPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {state.nightRoutineActions.map((action) => (
+                    {(state.nightRoutineActions || []).map((action) => (
                       <tr key={action.id} className="border-t">
                         <td className="p-2">
                           <span className="text-sm font-medium">{action.name}</span>
@@ -469,19 +469,19 @@ export function RoutineNightPage() {
                 </div>
                 <div className="rounded-lg border p-4 text-center">
                   <p className="text-3xl font-bold text-success">
-                    {Math.max(...state.nightRoutineActions.map((a) => calculateStreak(state.nightRoutineLogs, a.id).longest), 0)}
+                    {state.nightRoutineActions?.length ? Math.max(...state.nightRoutineActions.map((a) => calculateStreak(state.nightRoutineLogs, a.id).longest), 0) : 0}
                   </p>
                   <p className="text-sm text-muted-foreground">Plus longue série</p>
                 </div>
                 <div className="rounded-lg border p-4 text-center">
                   <p className="text-3xl font-bold text-orange-500">
-                    {state.nightRoutineActions.filter((a) => calculateStreak(state.nightRoutineLogs, a.id).current > 0).length}
+                    {(state.nightRoutineActions || []).filter((a) => calculateStreak(state.nightRoutineLogs, a.id).current > 0).length}
                   </p>
                   <p className="text-sm text-muted-foreground">Séries actives</p>
                 </div>
                 <div className="rounded-lg border p-4 text-center">
                   <p className="text-3xl font-bold">
-                    {state.nightRoutineActions.length}
+                    {state.nightRoutineActions?.length || 0}
                   </p>
                   <p className="text-sm text-muted-foreground">Actions dans la routine</p>
                 </div>

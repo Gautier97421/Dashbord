@@ -11,6 +11,7 @@ import {
   Task,
   Mission,
   Project,
+  CalendarEvent,
   SleepLog,
   WorkoutSession,
   WorkoutProgram,
@@ -89,6 +90,10 @@ interface AppContextType {
   deleteWorkoutProgram: (id: string) => Promise<void>
   // API actions for dashboard widgets
   updateDashboardWidgets: (widgets: DashboardWidget[]) => Promise<void>
+  // API actions for calendar events
+  addCalendarEvent: (event: Omit<CalendarEvent, 'id'>) => Promise<void>
+  updateCalendarEvent: (event: CalendarEvent) => Promise<void>
+  deleteCalendarEvent: (id: string) => Promise<void>
   // API actions for settings
   updateSettings: (settings: Partial<UserSettings>) => void
 }
@@ -186,6 +191,15 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     // Sleep
     case "ADD_SLEEP_LOG":
+      // Handle upsert: check if log for this date already exists
+      const existingSleepLogIndex = state.sleepLogs.findIndex(
+        log => log.date === action.payload.date
+      )
+      if (existingSleepLogIndex >= 0) {
+        const newSleepLogs = [...state.sleepLogs]
+        newSleepLogs[existingSleepLogIndex] = action.payload
+        return { ...state, sleepLogs: newSleepLogs }
+      }
       return { ...state, sleepLogs: [...state.sleepLogs, action.payload] }
     case "UPDATE_SLEEP_LOG":
       return { ...state, sleepLogs: state.sleepLogs.map(s => s.id === action.payload.id ? action.payload : s) }
@@ -211,6 +225,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
     // Dashboard Widgets
     case "UPDATE_DASHBOARD_WIDGETS":
       return { ...state, dashboardWidgets: action.payload }
+
+    // Calendar Events
+    case "ADD_EVENT":
+      return { ...state, calendarEvents: [...state.calendarEvents, action.payload] }
+    case "UPDATE_EVENT":
+      return { ...state, calendarEvents: state.calendarEvents.map(e => e.id === action.payload.id ? action.payload : e) }
+    case "DELETE_EVENT":
+      return { ...state, calendarEvents: state.calendarEvents.filter(e => e.id !== action.payload) }
 
     // Settings
     case "UPDATE_SETTINGS":
@@ -266,6 +288,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         workoutSessions,
         workoutPrograms,
         dashboardWidgets,
+        calendarEvents,
       ] = await Promise.all([
         api.routinesApi.getActions().catch(() => []) as Promise<any[]>,
         api.routinesApi.getLogs().catch(() => []) as Promise<any[]>,
@@ -278,6 +301,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         api.workoutsApi.getAll().catch(() => []) as Promise<any[]>,
         api.workoutProgramsApi.getAll().catch(() => []) as Promise<any[]>,
         api.dashboardApi.getWidgets().catch(() => []) as Promise<any[]>,
+        api.calendarApi.getAll().catch(() => []) as Promise<any[]>,
       ])
 
       // Transform Prisma data to match our types
@@ -399,11 +423,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })),
         dashboardWidgets: dashboardWidgets.map((widget: any) => ({
           id: widget.id,
-          type: widget.type.replace(/_/g, '-'),
+          type: widget.type.replace(/_/g, '-') as any,
           enabled: widget.enabled,
           order: widget.order,
           width: widget.width,
           height: widget.height,
+        })),
+        calendarEvents: calendarEvents.map((event: any) => ({
+          id: event.id,
+          title: event.title,
+          date: event.date,
+          startTime: event.startTime,
+          endTime: event.endTime,
+          priority: event.priority,
+          isRecurring: event.isRecurring,
+          recurrencePattern: event.recurrencePattern,
+          missionId: event.missionId,
+          projectId: event.projectId,
+          completed: event.completed,
         })),
       }
 
@@ -619,8 +656,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Sleep
   const addSleepLog = useCallback(async (sleepLog: Omit<SleepLog, 'id'>) => {
     try {
-      const newLog = await api.sleepApi.createOrUpdate(sleepLog)
-      dispatch({ type: "ADD_SLEEP_LOG", payload: newLog as SleepLog })
+      const newLog = await api.sleepApi.createOrUpdate(sleepLog) as SleepLog
+      // Reducer handles upsert automatically based on date
+      dispatch({ type: "ADD_SLEEP_LOG", payload: newLog })
     } catch (error) {
       console.error('Error adding sleep log:', error)
       throw error
@@ -712,10 +750,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Dashboard Widgets
   const updateDashboardWidgets = useCallback(async (widgets: DashboardWidget[]) => {
     try {
-      await api.dashboardApi.updateWidgets(widgets)
+      // Convert dashes to underscores for Prisma enum
+      const widgetsForDb = widgets.map(w => ({
+        ...w,
+        type: w.type.replace(/-/g, '_')
+      }))
+      await api.dashboardApi.updateWidgets(widgetsForDb)
       dispatch({ type: "UPDATE_DASHBOARD_WIDGETS", payload: widgets })
     } catch (error) {
       console.error('Error updating dashboard widgets:', error)
+      throw error
+    }
+  }, [])
+
+  // Calendar Events
+  const addCalendarEvent = useCallback(async (event: Omit<CalendarEvent, 'id'>) => {
+    try {
+      const newEvent = await api.calendarApi.create(event)
+      dispatch({ type: "ADD_EVENT", payload: newEvent as CalendarEvent })
+    } catch (error) {
+      console.error('Error adding calendar event:', error)
+      throw error
+    }
+  }, [])
+
+  const updateCalendarEvent = useCallback(async (event: CalendarEvent) => {
+    try {
+      const updated = await api.calendarApi.update(event)
+      dispatch({ type: "UPDATE_EVENT", payload: updated as CalendarEvent })
+    } catch (error) {
+      console.error('Error updating calendar event:', error)
+      throw error
+    }
+  }, [])
+
+  const deleteCalendarEvent = useCallback(async (id: string) => {
+    try {
+      await api.calendarApi.delete(id)
+      dispatch({ type: "DELETE_EVENT", payload: id })
+    } catch (error) {
+      console.error('Error deleting calendar event:', error)
       throw error
     }
   }, [])
@@ -766,6 +840,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteWorkoutProgram,
     // Dashboard widgets
     updateDashboardWidgets,
+    // Calendar events
+    addCalendarEvent,
+    updateCalendarEvent,
+    deleteCalendarEvent,
     // Settings
     updateSettings,
   }

@@ -133,7 +133,7 @@ export function SleepPage() {
 
     await addSleepLogApi({
       date: newLog.date || getToday(),
-      bedtime: newLog.bedTime,
+      bedTime: newLog.bedTime,
       wakeTime: newLog.wakeTime,
       duration,
       quality: newLog.quality || 3,
