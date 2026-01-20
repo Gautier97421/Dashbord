@@ -36,13 +36,13 @@ import {
   FolderOpen,
   Archive,
 } from "lucide-react"
-import { useApp } from "@/lib/store"
-import { generateId, formatDateFr } from "@/lib/store"
+import { useApp } from "@/lib/store-api"
+import { generateId, formatDateFr } from "@/lib/helpers"
 import type { Project, Task, TaskStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 export function ProjectsPage() {
-  const { state, dispatch } = useApp()
+  const { state, addProject, updateProject, deleteProject } = useApp()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
@@ -74,33 +74,21 @@ export function ProjectsPage() {
     return Math.round((completed / project.tasks.length) * 100)
   }
 
-  const handleSaveProject = () => {
+  const handleSaveProject = async () => {
     if (!newProject.title) return
 
     if (editingProject) {
-      dispatch({
-        type: "UPDATE_PROJECT",
-        payload: {
-          ...editingProject,
-          title: newProject.title!,
-          description: newProject.description,
-          objectives: newProject.objectives || [],
-          tasks: newProject.tasks || [],
-          deadline: newProject.deadline,
-        },
+      await updateProject({
+        ...editingProject,
+        name: newProject.title!,
+        description: newProject.description,
+        color: editingProject.color || "#3B82F6",
       })
     } else {
-      dispatch({
-        type: "ADD_PROJECT",
-        payload: {
-          id: generateId(),
-          title: newProject.title!,
-          description: newProject.description,
-          objectives: newProject.objectives || [],
-          tasks: newProject.tasks || [],
-          deadline: newProject.deadline,
-          createdAt: new Date().toISOString(),
-        },
+      await addProject({
+        name: newProject.title!,
+        description: newProject.description,
+        color: "#3B82F6",
       })
     }
 
@@ -132,20 +120,17 @@ export function ProjectsPage() {
     setIsDialogOpen(true)
   }
 
-  const handleDeleteProject = (id: string) => {
-    dispatch({ type: "DELETE_PROJECT", payload: id })
+  const handleDeleteProject = async (id: string) => {
+    await deleteProject(id)
     if (selectedProjectId === id) {
       setSelectedProjectId(null)
     }
   }
 
-  const toggleProjectComplete = (project: Project) => {
-    dispatch({
-      type: "UPDATE_PROJECT",
-      payload: {
-        ...project,
-        completedAt: project.completedAt ? undefined : new Date().toISOString(),
-      },
+  const toggleProjectComplete = async (project: Project) => {
+    await updateProject({
+      ...project,
+      completedAt: project.completedAt ? undefined : new Date().toISOString(),
     })
   }
 
@@ -188,7 +173,7 @@ export function ProjectsPage() {
     })
   }
 
-  const toggleTaskInProject = (projectId: string, taskId: string) => {
+  const toggleTaskInProject = async (projectId: string, taskId: string) => {
     const project = state.projects.find((p) => p.id === projectId)
     if (!project) return
 
@@ -202,13 +187,10 @@ export function ProjectsPage() {
         : t
     )
 
-    dispatch({
-      type: "UPDATE_PROJECT",
-      payload: { ...project, tasks: updatedTasks },
-    })
+    await updateProject({ ...project, tasks: updatedTasks })
   }
 
-  const addTaskToProject = (projectId: string, title: string) => {
+  const addTaskToProject = async (projectId: string, title: string) => {
     const project = state.projects.find((p) => p.id === projectId)
     if (!project || !title.trim()) return
 
@@ -220,22 +202,16 @@ export function ProjectsPage() {
       createdAt: new Date().toISOString(),
     }
 
-    dispatch({
-      type: "UPDATE_PROJECT",
-      payload: { ...project, tasks: [...project.tasks, task] },
-    })
+    await updateProject({ ...project, tasks: [...project.tasks, task] })
   }
 
-  const deleteTaskFromProject = (projectId: string, taskId: string) => {
+  const deleteTaskFromProject = async (projectId: string, taskId: string) => {
     const project = state.projects.find((p) => p.id === projectId)
     if (!project) return
 
-    dispatch({
-      type: "UPDATE_PROJECT",
-      payload: {
-        ...project,
-        tasks: project.tasks.filter((t) => t.id !== taskId),
-      },
+    await updateProject({
+      ...project,
+      tasks: project.tasks.filter((t) => t.id !== taskId),
     })
   }
 

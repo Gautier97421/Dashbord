@@ -1,14 +1,23 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
-// Temporary: hardcoded userId until auth is implemented
-const TEMP_USER_ID = 'temp-user-001'
-
-// GET night routine logs
+// GET all night routine logs
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const logs = await prisma.nightRoutineLog.findMany({
-      where: { userId: TEMP_USER_ID },
+      where: { userId: user.id },
       include: {
         action: true,
       },
@@ -25,12 +34,23 @@ export async function GET() {
 // POST log a night routine action
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const body = await request.json()
     const { actionId, date, completed } = body
 
     const log = await prisma.nightRoutineLog.upsert({
       where: {
-        actionId_date: {
+        userId_actionId_date: {
+          userId: user.id,
           actionId,
           date,
         },
@@ -39,7 +59,7 @@ export async function POST(request: Request) {
         completed,
       },
       create: {
-        userId: TEMP_USER_ID,
+        userId: user.id,
         actionId,
         date,
         completed,

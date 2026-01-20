@@ -1,11 +1,13 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import { useToast } from "@/hooks/use-toast"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,9 +28,9 @@ import {
   Download,
   Upload,
   RefreshCw,
+  Loader2,
 } from "lucide-react"
-import { useApp } from "@/lib/store"
-import { defaultState } from "@/lib/store"
+import { useApp } from "@/lib/store-api"
 
 const HOURS = Array.from({ length: 24 }, (_, i) => ({
   value: i.toString(),
@@ -36,56 +38,47 @@ const HOURS = Array.from({ length: 24 }, (_, i) => ({
 }))
 
 export function SettingsPage() {
-  const { state, dispatch } = useApp()
+  const { state, updateSettings } = useApp()
+  const { toast } = useToast()
+  const [isResetting, setIsResetting] = useState(false)
 
   const handleThemeChange = (theme: "light" | "dark" | "system") => {
-    dispatch({ type: "UPDATE_SETTINGS", payload: { theme } })
+    updateSettings({ theme })
   }
 
-  const handleResetData = () => {
-    // Reset to default state by clearing localStorage and reloading
-    localStorage.removeItem("productivity-dashboard-v1")
-    window.location.reload()
-  }
+  const handleResetData = async () => {
+    setIsResetting(true)
+    try {
+      const response = await fetch('/api/reset', {
+        method: 'POST',
+      })
 
-  const handleExportData = () => {
-    const dataStr = JSON.stringify(state, null, 2)
-    const blob = new Blob([dataStr], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `productivity-data-${new Date().toISOString().split("T")[0]}.json`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-  }
-
-  const handleImportData = () => {
-    const input = document.createElement("input")
-    input.type = "file"
-    input.accept = ".json"
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0]
-      if (file) {
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          try {
-            const data = JSON.parse(e.target?.result as string)
-            localStorage.setItem("productivity-dashboard-v1", JSON.stringify(data))
-            window.location.reload()
-          } catch (error) {
-            alert("Fichier invalide. Veuillez sélectionner un fichier JSON valide.")
-          }
-        }
-        reader.readAsText(file)
+      if (!response.ok) {
+        throw new Error('Erreur lors de la réinitialisation')
       }
+
+      toast({
+        title: "Données réinitialisées",
+        description: "Toutes vos données ont été supprimées avec succès.",
+      })
+
+      // Recharger la page après un court délai
+      setTimeout(() => {
+        window.location.href = '/'
+      }, 1500)
+    } catch (error) {
+      console.error('Erreur:', error)
+      toast({
+        title: "Erreur",
+        description: "Une erreur est survenue lors de la réinitialisation.",
+        variant: "destructive",
+      })
+      setIsResetting(false)
     }
-    input.click()
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-2xl" style={{ fontFamily: 'cursive' }}>
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Paramètres</h1>
         <p className="text-muted-foreground">Personnalisez votre expérience</p>
@@ -130,68 +123,6 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Day Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="size-5" />
-            Heures de la journée
-          </CardTitle>
-          <CardDescription>Définissez vos heures de travail</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Début de journée</Label>
-              <Select
-                value={state.settings.dayStartHour.toString()}
-                onValueChange={(value) =>
-                  dispatch({
-                    type: "UPDATE_SETTINGS",
-                    payload: { dayStartHour: parseInt(value) },
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {HOURS.slice(0, 12).map((hour) => (
-                    <SelectItem key={hour.value} value={hour.value}>
-                      {hour.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Fin de journée</Label>
-              <Select
-                value={state.settings.dayEndHour.toString()}
-                onValueChange={(value) =>
-                  dispatch({
-                    type: "UPDATE_SETTINGS",
-                    payload: { dayEndHour: parseInt(value) },
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {HOURS.slice(12).map((hour) => (
-                    <SelectItem key={hour.value} value={hour.value}>
-                      {hour.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Display Settings */}
       <Card>
         <CardHeader>
@@ -210,7 +141,7 @@ export function SettingsPage() {
               id="showRoutines"
               checked={state.settings.showRoutines}
               onCheckedChange={(checked) =>
-                dispatch({ type: "UPDATE_SETTINGS", payload: { showRoutines: checked } })
+                updateSettings({ showRoutines: checked })
               }
             />
           </div>
@@ -228,7 +159,7 @@ export function SettingsPage() {
               id="showStats"
               checked={state.settings.showStats}
               onCheckedChange={(checked) =>
-                dispatch({ type: "UPDATE_SETTINGS", payload: { showStats: checked } })
+                updateSettings({ showStats: checked })
               }
             />
           </div>
@@ -246,7 +177,7 @@ export function SettingsPage() {
               id="showDailyInsight"
               checked={state.settings.showDailyInsight}
               onCheckedChange={(checked) =>
-                dispatch({ type: "UPDATE_SETTINGS", payload: { showDailyInsight: checked } })
+                updateSettings({ showDailyInsight: checked })
               }
             />
           </div>
@@ -260,40 +191,36 @@ export function SettingsPage() {
           <CardDescription>Gérez vos données personnelles</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Button variant="outline" className="flex-1 bg-transparent" onClick={handleExportData}>
-              <Download className="size-4 mr-2" />
-              Exporter les données
-            </Button>
-            <Button variant="outline" className="flex-1 bg-transparent" onClick={handleImportData}>
-              <Upload className="size-4 mr-2" />
-              Importer les données
-            </Button>
-          </div>
-
-          <Separator />
-
           <div className="space-y-3">
             <div>
               <h4 className="font-medium text-destructive">Zone de danger</h4>
               <p className="text-sm text-muted-foreground">
-                Ces actions sont irréversibles
+                Cette action est irréversible
               </p>
             </div>
 
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="w-full sm:w-auto">
-                  <Trash2 className="size-4 mr-2" />
-                  Réinitialiser toutes les données
+                <Button variant="destructive" className="w-full sm:w-auto" disabled={isResetting}>
+                  {isResetting ? (
+                    <>
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                      Réinitialisation...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="size-4 mr-2" />
+                      Réinitialiser toutes les données
+                    </>
+                  )}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Êtes-vous sûr ?</AlertDialogTitle>
+                  <AlertDialogTitle>Êtes-vous absolument sûr ?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Cette action est irréversible. Toutes vos routines, missions, projets
-                    et statistiques seront définitivement supprimés.
+                    Cette action est irréversible. Toutes vos routines, missions, projets,
+                    entraînements et statistiques seront définitivement supprimés de la base de données.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -302,48 +229,11 @@ export function SettingsPage() {
                     onClick={handleResetData}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
-                    Réinitialiser
+                    Oui, tout supprimer
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Profil de santé */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Profil de santé</CardTitle>
-          <CardDescription>Recommandations pour une vie équilibrée</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-4">
-            <div>
-              <h3 className="font-semibold mb-3">Hydratation et sommeil</h3>
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="p-4 rounded-lg bg-muted border">
-                  <div className="flex items-center gap-3">
-                    <div className="text-4xl">💧</div>
-                    <div>
-                      <p className="font-semibold">Hydratation</p>
-                      <p className="text-2xl font-bold">2–2,5 L</p>
-                      <p className="text-sm text-muted-foreground">par jour</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="p-4 rounded-lg bg-muted border">
-                  <div className="flex items-center gap-3">
-                    <div className="text-4xl">😴</div>
-                    <div>
-                      <p className="font-semibold">Sommeil</p>
-                      <p className="text-2xl font-bold">7–9 h</p>
-                      <p className="text-sm text-muted-foreground">Essentiel pour la récupération</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </CardContent>
       </Card>

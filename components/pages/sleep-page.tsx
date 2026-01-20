@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { useApp } from "@/lib/store"
-import { generateId, getToday } from "@/lib/store"
+import { useApp } from "@/lib/store-api"
+import { generateId, getToday } from "@/lib/helpers"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,7 +13,7 @@ import { Clock, Moon, TrendingUp, Calendar as CalendarIcon, Plus, Trash2 } from 
 import type { SleepLog } from "@/lib/types"
 
 export function SleepPage() {
-  const { state, dispatch } = useApp()
+  const { state, addSleepLog: addSleepLogApi, deleteSleepLog: deleteSleepLogApi } = useApp()
   const [showAddForm, setShowAddForm] = useState(false)
   const [newLog, setNewLog] = useState<Partial<SleepLog>>({
     date: getToday(),
@@ -112,7 +112,7 @@ export function SleepPage() {
     setSelectedDate(date.toISOString().split("T")[0])
   }
 
-  const addSleepLog = () => {
+  const addSleepLog = async () => {
     if (!newLog.bedTime || !newLog.wakeTime) return
 
     const [bedHours, bedMinutes] = newLog.bedTime.split(":").map(Number)
@@ -131,23 +131,20 @@ export function SleepPage() {
     
     const duration = Math.round((wakeTime.getTime() - bedTime.getTime()) / (1000 * 60))
 
-    const log: SleepLog = {
-      id: generateId(),
+    await addSleepLogApi({
       date: newLog.date || getToday(),
-      bedTime: newLog.bedTime,
+      bedtime: newLog.bedTime,
       wakeTime: newLog.wakeTime,
       duration,
       quality: newLog.quality || 3,
       notes: newLog.notes,
-    }
-
-    dispatch({ type: "ADD_SLEEP_LOG", payload: log })
+    })
     setShowAddForm(false)
     setNewLog({ date: getToday(), bedTime: "23:00", wakeTime: "07:00", quality: 3 })
   }
 
-  const deleteSleepLog = (id: string) => {
-    dispatch({ type: "DELETE_SLEEP_LOG", payload: id })
+  const deleteSleepLog = async (id: string) => {
+    await deleteSleepLogApi(id)
   }
 
   // Calcul des statistiques

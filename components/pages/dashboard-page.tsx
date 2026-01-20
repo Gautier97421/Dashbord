@@ -15,6 +15,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   CheckCircle2,
   Circle,
   Clock,
@@ -28,6 +38,7 @@ import {
   GripVertical,
   Plus,
   Settings,
+  RotateCcw,
   Moon,
   Bed,
   Dumbbell,
@@ -36,8 +47,8 @@ import {
   Trash2,
   Edit3,
 } from "lucide-react"
-import { useApp } from "@/lib/store"
-import { getToday, formatDateFr, calculateStreak, generateId } from "@/lib/store"
+import { useApp } from "@/lib/store-api"
+import { getToday, formatDateFr, calculateStreak, generateId } from "@/lib/helpers"
 import type { NavPage } from "@/components/app-sidebar"
 import type { WidgetType, DashboardWidget } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -82,10 +93,22 @@ const WIDGET_LABELS: Record<WidgetType, { label: string; description: string; ic
   "nutrition-macros": { label: "Macros", description: "Répartition protéines/glucides/lipides", icon: Target, category: "Nutrition" },
 }
 
+const DEFAULT_DASHBOARD_WIDGETS: DashboardWidget[] = [
+  { id: "1", type: "routine-progress", enabled: true, order: 0, width: 1, height: 1 },
+  { id: "2", type: "missions-stats", enabled: true, order: 1, width: 1, height: 1 },
+  { id: "3", type: "tasks-stats", enabled: true, order: 2, width: 1, height: 1 },
+  { id: "4", type: "projects-stats", enabled: true, order: 3, width: 1, height: 1 },
+  { id: "5", type: "routine-list", enabled: true, order: 4, width: 2, height: 1 },
+  { id: "6", type: "today-missions", enabled: true, order: 5, width: 2, height: 1 },
+  { id: "7", type: "week-missions", enabled: true, order: 6, width: 2, height: 1 },
+  { id: "8", type: "active-projects", enabled: true, order: 7, width: 2, height: 1 },
+]
+
 export function DashboardPage({ onNavigate }: DashboardPageProps) {
-  const { state, dispatch } = useApp()
+  const { state, dispatch, isLoading, updateDashboardWidgets } = useApp()
   const today = getToday()
   const [showWidgetConfig, setShowWidgetConfig] = useState(false)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [draggedWidget, setDraggedWidget] = useState<string | null>(null)
   const [dragOverWidget, setDragOverWidget] = useState<string | null>(null)
   const [editingWidget, setEditingWidget] = useState<string | null>(null)
@@ -94,19 +117,28 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const [resizeStart, setResizeStart] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [resizeType, setResizeType] = useState<'width' | 'height' | 'both' | null>(null)
 
-  // Initialize widgets from state or use defaults
+  // Initialize widgets from store or defaults
   const [widgets, setWidgets] = useState<DashboardWidget[]>(
-    state.dashboardWidgets || [
-      { id: "1", type: "routine-progress", enabled: true, order: 0, width: 1, height: 1 },
-      { id: "2", type: "missions-stats", enabled: true, order: 1, width: 1, height: 1 },
-      { id: "3", type: "tasks-stats", enabled: true, order: 2, width: 1, height: 1 },
-      { id: "4", type: "projects-stats", enabled: true, order: 3, width: 1, height: 1 },
-      { id: "5", type: "routine-list", enabled: true, order: 4, width: 2, height: 1 },
-      { id: "6", type: "today-missions", enabled: true, order: 5, width: 2, height: 1 },
-      { id: "7", type: "week-missions", enabled: true, order: 6, width: 2, height: 1 },
-      { id: "8", type: "active-projects", enabled: true, order: 7, width: 2, height: 1 },
-    ]
+    state.dashboardWidgets.length > 0 ? state.dashboardWidgets : DEFAULT_DASHBOARD_WIDGETS
   )
+
+  // Sync widgets with store data (and seed defaults for new users)
+  useEffect(() => {
+    if (state.dashboardWidgets.length > 0) {
+      setWidgets(state.dashboardWidgets)
+      return
+    }
+
+    if (!isLoading && state.dashboardWidgets.length === 0) {
+      setWidgets((prev) => {
+        if (prev.length === 0) {
+          updateDashboardWidgets(DEFAULT_DASHBOARD_WIDGETS)
+          return DEFAULT_DASHBOARD_WIDGETS
+        }
+        return prev
+      })
+    }
+  }, [state.dashboardWidgets, isLoading, updateDashboardWidgets])
 
   const enabledWidgets = useMemo(() => {
     return widgets.filter((w) => w.enabled).sort((a, b) => a.order - b.order)
@@ -182,11 +214,13 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
       ? Math.round(recentSleepLogs.reduce((acc, log) => acc + log.quality, 0) / recentSleepLogs.length)
       : 0
 
-    // Workout stats
+    // Workout stats - Ne compter QUE les entraînements passés (ou aujourd'hui) ET complétés
     const weekWorkouts = state.workoutSessions.filter((w) => {
       const weekAgo = new Date()
       weekAgo.setDate(weekAgo.getDate() - 7)
-      return new Date(w.date) >= weekAgo
+      const workoutDate = new Date(w.date)
+      const today = new Date().toISOString().split("T")[0]
+      return workoutDate >= weekAgo && w.date <= today && w.completed
     }).length
 
     return {
@@ -237,7 +271,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     setDragOverWidget(null)
   }
 
-  const handleDrop = (e: React.DragEvent, targetWidgetId: string) => {
+  const handleDrop = async (e: React.DragEvent, targetWidgetId: string) => {
     e.preventDefault()
 
     if (!draggedWidget || draggedWidget === targetWidgetId) {
@@ -259,20 +293,22 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     const updatedWidgets = newWidgets.map((w, idx) => ({ ...w, order: idx }))
     setWidgets(updatedWidgets)
     dispatch({ type: "UPDATE_DASHBOARD_WIDGETS", payload: updatedWidgets })
+    await updateDashboardWidgets(updatedWidgets)
 
     setDraggedWidget(null)
     setDragOverWidget(null)
   }
 
-  const toggleWidget = (widgetId: string) => {
+  const toggleWidget = async (widgetId: string) => {
     const updatedWidgets = widgets.map((w) =>
       w.id === widgetId ? { ...w, enabled: !w.enabled } : w
     )
     setWidgets(updatedWidgets)
     dispatch({ type: "UPDATE_DASHBOARD_WIDGETS", payload: updatedWidgets })
+    await updateDashboardWidgets(updatedWidgets)
   }
 
-  const addWidget = (type: WidgetType) => {
+  const addWidget = async (type: WidgetType) => {
     const newWidget: DashboardWidget = {
       id: generateId(),
       type,
@@ -284,6 +320,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     const updatedWidgets = [...widgets, newWidget]
     setWidgets(updatedWidgets)
     dispatch({ type: "UPDATE_DASHBOARD_WIDGETS", payload: updatedWidgets })
+    await updateDashboardWidgets(updatedWidgets)
   }
 
   const handleResizeStart = (e: React.MouseEvent, widgetId: string, type: 'width' | 'height' | 'both') => {
@@ -335,9 +372,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     }
   }
 
-  const handleResizeEnd = () => {
+  const handleResizeEnd = async () => {
     if (resizingWidget) {
       dispatch({ type: "UPDATE_DASHBOARD_WIDGETS", payload: widgets })
+      await updateDashboardWidgets(widgets)
     }
     setResizingWidget(null)
     setResizeStart(null)
@@ -356,23 +394,25 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     }
   }, [resizingWidget])
 
-  const changeWidgetType = (widgetId: string, newType: WidgetType) => {
+  const changeWidgetType = async (widgetId: string, newType: WidgetType) => {
     const updatedWidgets = widgets.map((w) =>
       w.id === widgetId ? { ...w, type: newType } : w
     )
     setWidgets(updatedWidgets)
     dispatch({ type: "UPDATE_DASHBOARD_WIDGETS", payload: updatedWidgets })
+    await updateDashboardWidgets(updatedWidgets)
     setEditingWidget(null)
     setEditWidgetType(null)
   }
 
-  const deleteWidget = (widgetId: string) => {
+  const deleteWidget = async (widgetId: string) => {
     const updatedWidgets = widgets.filter((w) => w.id !== widgetId)
     setWidgets(updatedWidgets)
     dispatch({ type: "UPDATE_DASHBOARD_WIDGETS", payload: updatedWidgets })
+    await updateDashboardWidgets(updatedWidgets)
   }
 
-  const resetToDefault = () => {
+  const resetToDefault = async () => {
     const defaultWidgets: DashboardWidget[] = [
       { id: "1", type: "routine-progress", enabled: true, order: 0, width: 1, height: 1 },
       { id: "2", type: "missions-stats", enabled: true, order: 1, width: 1, height: 1 },
@@ -385,6 +425,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     ]
     setWidgets(defaultWidgets)
     dispatch({ type: "UPDATE_DASHBOARD_WIDGETS", payload: defaultWidgets })
+    await updateDashboardWidgets(defaultWidgets)
+    setShowResetConfirm(false)
   }
 
   const renderWidget = (widget: DashboardWidget) => {
@@ -837,10 +879,16 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             {formatDateFr(new Date(), "full")} - Prêt pour une journée productive ?
           </p>
         </div>
-        <Button variant="outline" onClick={() => setShowWidgetConfig(true)}>
-          <Settings className="mr-2 size-4" />
-          Personnaliser
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={resetToDefault}>
+            <RotateCcw className="mr-2 size-4" />
+            Dashbord par défaut
+          </Button>
+          <Button variant="outline" onClick={() => setShowWidgetConfig(true)}>
+            <Settings className="mr-2 size-4" />
+            Personnaliser
+          </Button>
+        </div>
       </div>
 
       {/* Daily Insight */}
@@ -887,8 +935,110 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
       )}
 
       {/* Widgets Grid */}
-      <div className="grid gap-4 grid-cols-4 auto-rows-[200px]" style={{ gridAutoFlow: 'dense' }}>
-        {enabledWidgets.map((widget) => (
+      {enabledWidgets.length === 0 ? (
+        <div className="grid gap-4 grid-cols-4 auto-rows-[200px]">
+          {/* Aperçu des widgets par défaut en pointillés */}
+          <Card className="col-span-2 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+                onClick={() => addWidget("today-missions")}>
+            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
+              <Target className="size-8 text-muted-foreground mb-2" />
+              <p className="text-sm font-medium text-muted-foreground">Missions du jour</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Vos tâches importantes</p>
+              <Button 
+                size="icon" 
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                variant="ghost"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  addWidget("today-missions")
+                }}
+              >
+                <Plus className="size-5" />
+              </Button>
+            </CardContent>
+          </Card>
+          
+          <Card className="col-span-2 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+                onClick={() => addWidget("tasks-stats")}>
+            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
+              <CheckCircle2 className="size-8 text-muted-foreground mb-2" />
+              <p className="text-sm font-medium text-muted-foreground">Tâches rapides</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Actions à compléter</p>
+              <Button 
+                size="icon" 
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                variant="ghost"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  addWidget("tasks-stats")
+                }}
+              >
+                <Plus className="size-5" />
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="col-span-1 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+                onClick={() => addWidget("routine-progress")}>
+            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
+              <TrendingUp className="size-8 text-muted-foreground mb-2" />
+              <p className="text-xs font-medium text-muted-foreground">Progression</p>
+              <Button 
+                size="icon" 
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                variant="ghost"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  addWidget("routine-progress")
+                }}
+              >
+                <Plus className="size-5" />
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="col-span-1 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+                onClick={() => addWidget("routine-streak")}>
+            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
+              <Flame className="size-8 text-muted-foreground mb-2" />
+              <p className="text-xs font-medium text-muted-foreground">Série</p>
+              <Button 
+                size="icon" 
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                variant="ghost"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  addWidget("routine-streak")
+                }}
+              >
+                <Plus className="size-5" />
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="col-span-2 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+                onClick={() => addWidget("routine-list")}>
+            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
+              <Clock className="size-8 text-muted-foreground mb-2" />
+              <p className="text-sm font-medium text-muted-foreground">Routines</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Vos habitudes quotidiennes</p>
+              <Button 
+                size="icon" 
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                variant="ghost"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  addWidget("routine-list")
+                }}
+              >
+                <Plus className="size-5" />
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <div className="grid gap-4 grid-cols-4 auto-rows-[200px]" style={{ gridAutoFlow: 'dense' }}>
+          {enabledWidgets.map((widget) => (
           <div
             key={widget.id}
             onDragOver={(e) => handleDragOver(e, widget.id)}
@@ -987,7 +1137,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      )}
 
       {/* Edit Widget Type Dialog */}
       <Dialog open={editingWidget !== null} onOpenChange={(open) => {
@@ -1151,17 +1302,29 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button 
-              variant="outline" 
-              onClick={resetToDefault}
-              className="w-full sm:w-auto sm:mr-auto"
-            >
-              Réinitialiser par défaut
-            </Button>
             <Button onClick={() => setShowWidgetConfig(false)} className="w-full sm:w-auto">Terminé</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reset Confirmation Dialog */}
+      <AlertDialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Réinitialiser le tableau de bord ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action va supprimer tous vos widgets personnalisés et restaurer la configuration par défaut. 
+              Cette opération ne peut pas être annulée.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={resetToDefault}>
+              Confirmer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

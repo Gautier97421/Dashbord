@@ -47,9 +47,14 @@ RUN adduser --system --uid 1001 nextjs
 # Install pnpm for prisma commands
 RUN npm install -g pnpm
 
-# Copy Prisma files first
+# Copy Prisma files first (including migrations)
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+
+# Copy the entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Copy built application
 COPY --from=builder /app/public ./public
@@ -63,4 +68,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "server.js"]

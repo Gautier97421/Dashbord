@@ -1,14 +1,23 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-
-// Temporary: hardcoded userId until auth is implemented
-const TEMP_USER_ID = 'temp-user-001'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 // GET all routine actions
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const actions = await prisma.routineAction.findMany({
-      where: { userId: TEMP_USER_ID },
+      where: { userId: user.id },
       include: {
         logs: true,
       },
@@ -25,12 +34,22 @@ export async function GET() {
 // POST create a new routine action
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const body = await request.json()
     const { name, category, importance } = body
 
     const action = await prisma.routineAction.create({
       data: {
-        userId: TEMP_USER_ID,
+        userId: user.id,
         name,
         category,
         importance,

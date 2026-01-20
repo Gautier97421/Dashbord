@@ -1,14 +1,23 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-
-// Temporary: hardcoded userId until auth is implemented
-const TEMP_USER_ID = 'temp-user-001'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 // GET all projects
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const projects = await prisma.project.findMany({
-      where: { userId: TEMP_USER_ID },
+      where: { userId: user.id },
       include: {
         tasks: true,
         calendarEvents: true,
@@ -26,16 +35,25 @@ export async function GET() {
 // POST create a new project
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const body = await request.json()
-    const { title, description, objectives, deadline } = body
+    const { name, description, color } = body
 
     const project = await prisma.project.create({
       data: {
-        userId: TEMP_USER_ID,
-        title,
+        userId: user.id,
+        name,
         description,
-        objectives,
-        deadline,
+        color,
       },
     })
 

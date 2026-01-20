@@ -35,8 +35,8 @@ import {
   Edit,
   ChevronRight,
 } from "lucide-react"
-import { useApp } from "@/lib/store"
-import { generateId, formatDateFr } from "@/lib/store"
+import { useApp } from "@/lib/store-api"
+import { generateId, formatDateFr } from "@/lib/helpers"
 import type { Mission, Task, TimeFrame, Priority, TaskStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -60,7 +60,7 @@ const STATUSES: { value: TaskStatus; label: string }[] = [
 ]
 
 export function MissionsPage() {
-  const { state, dispatch } = useApp()
+  const { state, addMission, updateMission, deleteMission } = useApp()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingMission, setEditingMission] = useState<Mission | null>(null)
   const [activeTimeFrame, setActiveTimeFrame] = useState<TimeFrame>("day")
@@ -83,35 +83,28 @@ export function MissionsPage() {
     }
   }, [state.missions])
 
-  const handleSaveMission = () => {
+  const handleSaveMission = async () => {
     if (!newMission.title) return
 
     if (editingMission) {
-      dispatch({
-        type: "UPDATE_MISSION",
-        payload: {
-          ...editingMission,
-          title: newMission.title!,
-          description: newMission.description,
-          timeFrame: newMission.timeFrame!,
-          priority: newMission.priority!,
-          status: newMission.status!,
-          tasks: newMission.tasks || [],
-        },
+      await updateMission({
+        ...editingMission,
+        title: newMission.title!,
+        description: newMission.description,
+        timeFrame: newMission.timeFrame!,
+        priority: newMission.priority!,
+        status: newMission.status!,
+        tasks: newMission.tasks || [],
       })
     } else {
-      dispatch({
-        type: "ADD_MISSION",
-        payload: {
-          id: generateId(),
-          title: newMission.title!,
-          description: newMission.description,
-          timeFrame: newMission.timeFrame!,
-          priority: newMission.priority!,
-          status: newMission.status!,
-          tasks: newMission.tasks || [],
-          createdAt: new Date().toISOString(),
-        },
+      await addMission({
+        title: newMission.title!,
+        description: newMission.description,
+        timeFrame: newMission.timeFrame!,
+        priority: newMission.priority!,
+        status: newMission.status!,
+        tasks: newMission.tasks || [],
+        dueDate: new Date().toISOString().split('T')[0],
       })
     }
 
@@ -145,18 +138,15 @@ export function MissionsPage() {
     setIsDialogOpen(true)
   }
 
-  const handleDeleteMission = (id: string) => {
-    dispatch({ type: "DELETE_MISSION", payload: id })
+  const handleDeleteMission = async (id: string) => {
+    await deleteMission(id)
   }
 
-  const updateMissionStatus = (mission: Mission, status: TaskStatus) => {
-    dispatch({
-      type: "UPDATE_MISSION",
-      payload: {
-        ...mission,
-        status,
-        completedAt: status === "done" ? new Date().toISOString() : undefined,
-      },
+  const updateMissionStatus = async (mission: Mission, status: TaskStatus) => {
+    await updateMission({
+      ...mission,
+      status,
+      completedAt: status === "done" ? new Date().toISOString() : undefined,
     })
   }
 
@@ -185,17 +175,14 @@ export function MissionsPage() {
     })
   }
 
-  const toggleSubtaskInMission = (mission: Mission, taskId: string) => {
+  const toggleSubtaskInMission = async (mission: Mission, taskId: string) => {
     const updatedTasks = mission.tasks.map((t) =>
       t.id === taskId
         ? { ...t, status: t.status === "done" ? "todo" : "done" as TaskStatus }
         : t
     )
 
-    dispatch({
-      type: "UPDATE_MISSION",
-      payload: { ...mission, tasks: updatedTasks },
-    })
+    await updateMission({ ...mission, tasks: updatedTasks })
   }
 
   const getStatusIcon = (status: TaskStatus) => {

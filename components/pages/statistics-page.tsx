@@ -33,8 +33,8 @@ import {
   Award,
   AlertTriangle,
 } from "lucide-react"
-import { useApp } from "@/lib/store"
-import { getToday, calculateStreak } from "@/lib/store"
+import { useApp } from "@/lib/store-api"
+import { getToday, calculateStreak } from "@/lib/helpers"
 import { cn } from "@/lib/utils"
 
 export function StatisticsPage() {

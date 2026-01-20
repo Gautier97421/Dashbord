@@ -1,6 +1,15 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+/* Police cursive pour tout le site */
+body {
+  font-family: cursive !important;
+}
+
+* {
+  font-family: inherit;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 :root {

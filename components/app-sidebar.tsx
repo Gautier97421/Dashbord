@@ -1,6 +1,7 @@
 "use client"
 
 import React from "react"
+import { signOut, useSession } from "next-auth/react"
 
 import {
   LayoutDashboard,
@@ -14,6 +15,7 @@ import {
   Moon,
   Dumbbell,
   BedDouble,
+  LogOut,
 } from "lucide-react"
 import {
   Sidebar,
@@ -49,6 +51,9 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
+  const { data: session } = useSession()
+  const userName = session?.user?.name || session?.user?.email?.split('@')[0] || "Utilisateur"
+
   return (
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border p-4">
@@ -61,8 +66,8 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
             />
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-semibold">Bonjour, Gautier</span>
-            <span className="text-xs text-muted-foreground">Votre assistant quotidien</span>
+            <span className="text-sm font-semibold" style={{ fontFamily: 'cursive' }}>Bonjour, {userName}</span>
+            <span className="text-xs text-muted-foreground" style={{ fontFamily: 'cursive' }}>Votre assistant quotidien</span>
           </div>
         </div>
       </SidebarHeader>
@@ -89,9 +94,20 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
         </SidebarGroup>
       </SidebarContent>
 
-      {/* <SidebarFooter className="border-t border-sidebar-border p-4">
-
-      </SidebarFooter> */}
+      <SidebarFooter className="border-t border-sidebar-border p-4">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              tooltip="Se déconnecter"
+              className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <LogOut className="size-4" />
+              <span>Se déconnecter</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   )
 }

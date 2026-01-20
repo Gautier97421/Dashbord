@@ -17,8 +17,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { ChevronLeft, ChevronRight, Plus, Clock, CheckCircle2 } from "lucide-react"
-import { useApp } from "@/lib/store"
-import { generateId, formatDateFr, getToday } from "@/lib/store"
+import { useApp } from "@/lib/store-api"
+import { generateId, formatDateFr, getToday } from "@/lib/helpers"
 import type { CalendarEvent, Priority } from "@/lib/types"
 import { cn } from "@/lib/utils"
 

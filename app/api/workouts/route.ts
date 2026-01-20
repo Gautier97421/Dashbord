@@ -1,14 +1,23 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
-// Temporary: hardcoded userId until auth is implemented
-const TEMP_USER_ID = 'temp-user-001'
-
-// GET all workout sessions
+// GET all workouts
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const workouts = await prisma.workoutSession.findMany({
-      where: { userId: TEMP_USER_ID },
+      where: { userId: user.id },
       include: {
         program: true,
       },
@@ -25,12 +34,22 @@ export async function GET() {
 // POST create a new workout session
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const body = await request.json()
     const { date, type, customType, duration, notes, intensity, completed, programId, missionId } = body
 
     const workout = await prisma.workoutSession.create({
       data: {
-        userId: TEMP_USER_ID,
+        userId: user.id,
         date,
         type,
         customType,

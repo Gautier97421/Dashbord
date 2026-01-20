@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useApp } from "@/lib/store"
-import { generateId, getToday } from "@/lib/store"
+import { useApp } from "@/lib/store-api"
+import { generateId, getToday } from "@/lib/helpers"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -28,6 +28,20 @@ export function SportPage() {
   const [selectedProgramId, setSelectedProgramId] = useState<string | null>(null)
   const [applyWeeks, setApplyWeeks] = useState(4)
   const [selectedDate, setSelectedDate] = useState(getToday())
+
+  // Nettoyer automatiquement les entraînements passés non complétés
+  useEffect(() => {
+    const today = getToday()
+    const pastIncompleteWorkouts = state.workoutSessions.filter(
+      (workout) => workout.date < today && !workout.completed
+    )
+    
+    if (pastIncompleteWorkouts.length > 0) {
+      pastIncompleteWorkouts.forEach((workout) => {
+        dispatch({ type: "DELETE_WORKOUT", payload: workout.id })
+      })
+    }
+  }, [state.workoutSessions, dispatch])
 
   // États pour les formulaires
   const [newWorkout, setNewWorkout] = useState<Partial<WorkoutSession>>({
@@ -515,12 +529,14 @@ export function SportPage() {
     dispatch({ type: "UPDATE_DAILY_NUTRITION", payload: updated })
   }
 
-  // Statistiques
+  // Statistiques - Ne compter QUE les entraînements passés ET complétés
+  const today = getToday()
   const last30DaysWorkouts = state.workoutSessions.filter((w) => {
     const workoutDate = new Date(w.date)
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    return workoutDate >= thirtyDaysAgo
+    // Ne compter que les entraînements passés (ou aujourd'hui) ET complétés
+    return workoutDate >= thirtyDaysAgo && w.date <= today && w.completed
   })
 
   const totalWorkouts = last30DaysWorkouts.length
@@ -810,31 +826,44 @@ export function SportPage() {
                             {workouts.map((workout) => (
                               <div
                                 key={workout.id}
-                                className="group relative cursor-pointer"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  editWorkout(workout)
-                                }}
+                                className="group relative"
                               >
-                                <div className={`text-xs px-1 py-0.5 rounded flex items-center justify-between ${
+                                <div className={`text-xs px-1 py-0.5 rounded flex items-center gap-1 ${
                                   workout.completed
                                     ? "bg-green-500/20 text-green-700 dark:text-green-300 line-through"
                                     : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
                                 }`}>
-                                  <span className="truncate">
-                                    {workout.type === "other" && workout.customType ? workout.customType : activityTypeLabels[workout.type]}
-                                  </span>
-                                  <CheckCircle2
-                                    className={`h-3 w-3 ml-1 flex-shrink-0 cursor-pointer ${
-                                      workout.completed ? "text-green-600" : "text-muted-foreground"
-                                    }`}
+                                  <span 
+                                    className="truncate flex-1 cursor-pointer"
                                     onClick={(e) => {
                                       e.stopPropagation()
-                                      toggleWorkoutCompletion(workout)
+                                      editWorkout(workout)
                                     }}
-                                  />
+                                  >
+                                    {workout.type === "other" && workout.customType ? workout.customType : activityTypeLabels[workout.type]}
+                                  </span>
+                                  <div className="flex items-center gap-0.5">
+                                    <CheckCircle2
+                                      className={`h-3 w-3 flex-shrink-0 cursor-pointer hover:scale-110 transition-transform ${
+                                        workout.completed ? "text-green-600" : "text-muted-foreground hover:text-green-600"
+                                      }`}
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        toggleWorkoutCompletion(workout)
+                                      }}
+                                    />
+                                    <Trash2
+                                      className="h-3 w-3 flex-shrink-0 cursor-pointer opacity-0 group-hover:opacity-100 hover:scale-110 transition-all text-destructive hover:text-destructive"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        if (confirm("Supprimer cet entraînement ?")) {
+                                          deleteWorkout(workout.id)
+                                        }
+                                      }}
+                                    />
+                                  </div>
                                 </div>
-                                <div className="text-xs text-muted-foreground">
+                                <div className="text-xs text-muted-foreground px-1">
                                   {workout.duration} min
                                 </div>
                               </div>

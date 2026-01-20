@@ -1,10 +1,11 @@
 "use client"
 
-import { useState } from "react"
-import { AppProvider } from "@/components/app-provider"
+import { useState, useEffect } from "react"
+import { AppProviderWrapper as AppProvider } from "@/components/app-provider"
 import { AppSidebar, type NavPage } from "@/components/app-sidebar"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
+import { OnboardingTutorial } from "@/components/onboarding-tutorial"
 import { DashboardPage } from "@/components/pages/dashboard-page"
 import { CalendarPage } from "@/components/pages/calendar-page"
 import { RoutinePage } from "@/components/pages/routine-page"
@@ -18,6 +19,28 @@ import { SettingsPage } from "@/components/pages/settings-page"
 
 function DashboardLayout() {
   const [currentPage, setCurrentPage] = useState<NavPage>("dashboard")
+  const [showOnboarding, setShowOnboarding] = useState(false)
+
+  useEffect(() => {
+    // Check if user has completed onboarding
+    fetch('/api/user/onboarding')
+      .then(res => res.json())
+      .then(data => {
+        if (!data.hasCompletedOnboarding) {
+          setShowOnboarding(true)
+        }
+      })
+      .catch(err => console.error('Failed to check onboarding status:', err))
+  }, [])
+
+  const handleCompleteOnboarding = async () => {
+    try {
+      await fetch('/api/user/onboarding', { method: 'POST' })
+      setShowOnboarding(false)
+    } catch (err) {
+      console.error('Failed to complete onboarding:', err)
+    }
+  }
 
   const renderPage = () => {
     switch (currentPage) {
@@ -64,6 +87,7 @@ function DashboardLayout() {
 
   return (
     <SidebarProvider defaultOpen={false}>
+      <OnboardingTutorial open={showOnboarding} onComplete={handleCompleteOnboarding} />
       <AppSidebar currentPage={currentPage} onNavigate={setCurrentPage} />
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">

@@ -31,8 +31,8 @@ import {
   Moon,
   GripVertical,
 } from "lucide-react"
-import { useApp } from "@/lib/store"
-import { generateId, getToday, formatDateFr, calculateStreak } from "@/lib/store"
+import { useApp } from "@/lib/store-api"
+import { generateId, getToday, formatDateFr, calculateStreak } from "@/lib/helpers"
 import type { NightRoutineAction, Priority } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -43,7 +43,7 @@ const PRIORITIES: { value: Priority; label: string }[] = [
 ]
 
 export function RoutineNightPage() {
-  const { state, dispatch } = useApp()
+  const { state, dispatch, addNightRoutineAction, updateNightRoutineAction, deleteNightRoutineAction, logNightRoutine } = useApp()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingAction, setEditingAction] = useState<NightRoutineAction | null>(null)
   const [newAction, setNewAction] = useState<Partial<NightRoutineAction>>({
@@ -85,44 +85,28 @@ export function RoutineNightPage() {
     return dates
   }, [selectedWeek])
 
-  const toggleRoutine = (actionId: string, date?: string) => {
+  const toggleRoutine = async (actionId: string, date?: string) => {
     const targetDate = date || today
     const existingLog = state.nightRoutineLogs.find(
       (l) => l.actionId === actionId && l.date === targetDate
     )
 
-    dispatch({
-      type: "LOG_NIGHT_ROUTINE",
-      payload: {
-        id: existingLog?.id || generateId(),
-        actionId,
-        date: targetDate,
-        completed: !existingLog?.completed,
-      },
-    })
+    await logNightRoutine(actionId, targetDate, !existingLog?.completed)
   }
 
-  const handleSaveAction = () => {
+  const handleSaveAction = async () => {
     if (!newAction.name) return
 
     if (editingAction) {
-      dispatch({
-        type: "UPDATE_NIGHT_ROUTINE_ACTION",
-        payload: {
-          ...editingAction,
-          name: newAction.name!,
-          importance: newAction.importance!,
-        },
+      await updateNightRoutineAction({
+        ...editingAction,
+        name: newAction.name!,
+        importance: newAction.importance!,
       })
     } else {
-      dispatch({
-        type: "ADD_NIGHT_ROUTINE_ACTION",
-        payload: {
-          id: generateId(),
-          name: newAction.name!,
-          importance: newAction.importance!,
-          createdAt: new Date().toISOString(),
-        },
+      await addNightRoutineAction({
+        name: newAction.name!,
+        importance: newAction.importance!,
       })
     }
 
@@ -131,8 +115,8 @@ export function RoutineNightPage() {
     setIsDialogOpen(false)
   }
 
-  const handleDeleteAction = (id: string) => {
-    dispatch({ type: "DELETE_NIGHT_ROUTINE_ACTION", payload: id })
+  const handleDeleteAction = async (id: string) => {
+    await deleteNightRoutineAction(id)
   }
 
   const handleDragStart = (e: React.DragEvent, actionId: string) => {
