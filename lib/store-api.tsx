@@ -379,17 +379,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           objectives: Array.isArray(project.objectives) ? project.objectives : [],
           deadline: project.deadline ? new Date(project.deadline).toISOString() : undefined,
           completedAt: project.completedAt ? new Date(project.completedAt).toISOString() : undefined,
-          tasks: Array.isArray(project.tasks) ? project.tasks.map((task: any) => ({
-            id: task.id,
-            title: task.title,
-            description: task.description,
-            status: task.status,
-            priority: task.priority,
-            dueDate: task.dueDate,
-            missionId: task.missionId,
-            projectId: task.projectId,
-            createdAt: new Date(task.createdAt).toISOString(),
-          })) : [],
+          tasks: [], // Tasks are loaded separately in state.tasks with projectId
           createdAt: new Date(project.createdAt).toISOString(),
         })),
         sleepLogs: sleepLogs.map((log: any) => ({

@@ -91,8 +91,8 @@ export async function PUT(request: Request) {
         title,
         description,
         objectives,
-        deadline: deadline ? new Date(deadline).toISOString() : undefined,
-        completedAt: completedAt ? new Date(completedAt).toISOString() : undefined,
+        deadline: deadline ? new Date(deadline).toISOString() : null,
+        completedAt: completedAt === null ? null : (completedAt ? new Date(completedAt).toISOString() : undefined),
       },
       include: {
         tasks: true,

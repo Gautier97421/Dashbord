@@ -147,6 +147,7 @@ export interface WorkoutProgramSession {
   customType?: string
   duration: number
   intensity: "light" | "moderate" | "intense"
+  time?: string // Heure facultative (format HH:mm)
   notes?: string
 }
 

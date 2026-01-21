@@ -369,6 +369,7 @@ model WorkoutProgramSession {
   customType String?
   duration   Int
   intensity  WorkoutIntensity
+  time       String?
   notes      String?
 
   program WorkoutProgram @relation(fields: [programId], references: [id], onDelete: Cascade)

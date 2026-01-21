@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -64,14 +64,23 @@ export function ProjectsPage() {
     return state.projects.filter((p) => p.completedAt)
   }, [state.projects])
 
-  const selectedProject = useMemo(() => {
-    return state.projects.find((p) => p.id === selectedProjectId)
-  }, [state.projects, selectedProjectId])
+  // Helper: Get tasks for a specific project from global state
+  const getProjectTasks = useCallback((projectId: string) => {
+    return state.tasks.filter((t) => t.projectId === projectId)
+  }, [state.tasks])
 
-  const getProjectProgress = (project: Project) => {
-    if (project.tasks.length === 0) return 0
-    const completed = project.tasks.filter((t) => t.status === "done").length
-    return Math.round((completed / project.tasks.length) * 100)
+  const selectedProject = useMemo(() => {
+    const project = state.projects.find((p) => p.id === selectedProjectId)
+    if (!project) return undefined
+    // Add tasks from state
+    return { ...project, tasks: getProjectTasks(project.id) }
+  }, [state.projects, getProjectTasks, selectedProjectId])
+
+  const getProjectProgress = (projectId: string) => {
+    const tasks = getProjectTasks(projectId)
+    if (tasks.length === 0) return 0
+    const completed = tasks.filter((t) => t.status === "done").length
+    return Math.round((completed / tasks.length) * 100)
   }
 
   const handleSaveProject = async () => {
@@ -132,7 +141,7 @@ export function ProjectsPage() {
   const toggleProjectComplete = async (project: Project) => {
     await updateProject({
       ...project,
-      completedAt: project.completedAt ? undefined : new Date().toISOString(),
+      completedAt: project.completedAt ? null : new Date().toISOString(),
     })
   }
 
@@ -176,49 +185,59 @@ export function ProjectsPage() {
   }
 
   const toggleTaskInProject = async (projectId: string, taskId: string) => {
-    const project = state.projects.find((p) => p.id === projectId)
-    if (!project) return
+    const task = state.tasks.find((t) => t.id === taskId)
+    if (!task) return
 
-    const updatedTasks = project.tasks.map((t) =>
-      t.id === taskId
-        ? {
-            ...t,
-            status: (t.status === "done" ? "todo" : "done") as TaskStatus,
-            completedAt: t.status !== "done" ? new Date().toISOString() : undefined,
-          }
-        : t
-    )
+    const newStatus = task.status === "done" ? "todo" : "done"
+    
+    await fetch("/api/tasks", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: taskId,
+        status: newStatus,
+        completedAt: newStatus === "done" ? new Date().toISOString() : null,
+      }),
+    })
 
-    await updateProject({ ...project, tasks: updatedTasks })
+    dispatch({ type: "UPDATE_TASK", payload: { ...task, status: newStatus, completedAt: newStatus === "done" ? new Date().toISOString() : null } })
   }
 
   const addTaskToProject = async (projectId: string, title: string) => {
-    const project = state.projects.find((p) => p.id === projectId)
-    if (!project || !title.trim()) return
+    if (!title.trim()) return
 
-    const task: Task = {
-      id: generateId(),
-      title,
-      priority: "medium",
-      status: "todo",
-      createdAt: new Date().toISOString(),
+    const response = await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        priority: "medium",
+        status: "todo",
+        projectId,
+      }),
+    })
+
+    if (response.ok) {
+      const newTask = await response.json()
+      dispatch({ type: "ADD_TASK", payload: newTask })
     }
-
-    await updateProject({ ...project, tasks: [...project.tasks, task] })
   }
 
   const deleteTaskFromProject = async (projectId: string, taskId: string) => {
-    const project = state.projects.find((p) => p.id === projectId)
-    if (!project) return
-
-    await updateProject({
-      ...project,
-      tasks: project.tasks.filter((t) => t.id !== taskId),
+    const response = await fetch("/api/tasks", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: taskId }),
     })
+
+    if (response.ok) {
+      dispatch({ type: "DELETE_TASK", payload: taskId })
+    }
   }
 
   const renderProjectCard = (project: Project) => {
-    const progress = getProjectProgress(project)
+    const progress = getProjectProgress(project.id)
+    const projectTasks = getProjectTasks(project.id)
     const isSelected = selectedProjectId === project.id
 
     return (
@@ -303,7 +322,7 @@ export function ProjectsPage() {
           <div className="mt-3 flex items-center gap-3 text-sm text-muted-foreground">
             <div className="flex items-center gap-1">
               <CheckCircle2 className="size-4" />
-              <span>{project.tasks.filter((t) => t.status === "done").length}/{project.tasks.length}</span>
+              <span>{projectTasks.filter((t) => t.status === "done").length}/{projectTasks.length}</span>
             </div>
             {project.deadline && (
               <div className="flex items-center gap-1">

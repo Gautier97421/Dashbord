@@ -14,8 +14,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Dumbbell, Plus, Trash2, TrendingUp, Apple, Trophy, User, Calendar as CalendarIcon, Droplets, Moon, Calendar, Clock, CheckCircle2 } from "lucide-react"
 import type { WorkoutSession, PersonalRecord, FitnessProfile, DailyNutrition, Meal, ActivityType, FitnessGoal, WorkoutProgram, WorkoutProgramSession, Mission, TimeFrame, Priority, TaskStatus } from "@/lib/types"
 
+// Ordre des jours : Lundi à Dimanche (dimanche en dernier)
+const DAYS_ORDER = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+const DAYS_VALUES = [1, 2, 3, 4, 5, 6, 0] // dayOfWeek correspondant (dimanche = 0 en dernier)
+const DAYS_FULL = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+
 export function SportPage() {
-  const { state, dispatch, updateFitnessProfile } = useApp()
+  const { state, dispatch, updateFitnessProfile, addWorkoutProgram, updateWorkoutProgram, deleteWorkoutProgram, addWorkout, updateWorkout, deleteWorkout, addMission } = useApp()
   const [activeTab, setActiveTab] = useState("workouts")
   const [showWorkoutForm, setShowWorkoutForm] = useState(false)
   const [showPRForm, setShowPRForm] = useState(false)
@@ -347,6 +352,7 @@ export function SportPage() {
       customType: newProgramSession.type === "other" ? newProgramSession.customType : undefined,
       duration: newProgramSession.duration,
       intensity: newProgramSession.intensity || "moderate",
+      time: newProgramSession.time,
       notes: newProgramSession.notes,
     }
 
@@ -361,6 +367,7 @@ export function SportPage() {
       customType: "",
       duration: 60,
       intensity: "moderate",
+      time: undefined,
     })
   }
 
@@ -371,20 +378,17 @@ export function SportPage() {
     })
   }
 
-  const saveProgram = () => {
+  const saveProgram = async () => {
     if (!newProgram.name || !newProgram.sessions || newProgram.sessions.length === 0) return
 
-    const program: WorkoutProgram = {
-      id: generateId(),
+    await addWorkoutProgram({
       name: newProgram.name,
       description: newProgram.description,
       sessions: newProgram.sessions,
       active: newProgram.active ?? true,
       autoCreateMissions: newProgram.autoCreateMissions ?? false,
-      createdAt: new Date().toISOString(),
-    }
+    })
 
-    dispatch({ type: "ADD_WORKOUT_PROGRAM", payload: program })
     setShowProgramForm(false)
     setNewProgram({
       name: "",
@@ -877,7 +881,7 @@ export function SportPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="absolute bottom-1 right-1 h-6 w-6 opacity-0 hover:opacity-100 transition-opacity"
+                          className="absolute bottom-1 right-1 h-6 w-6 opacity-50 hover:opacity-100 transition-opacity bg-background/80 hover:bg-background"
                           onClick={(e) => {
                             e.stopPropagation()
                             setNewWorkout({
@@ -1097,11 +1101,12 @@ export function SportPage() {
                             )}
                           </div>
                           <div className="grid grid-cols-7 gap-2 mt-4">
-                            {["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"].map((day, dayIndex) => {
-                              const session = program.sessions.find((s) => s.dayOfWeek === dayIndex)
+                            {DAYS_ORDER.map((day, index) => {
+                              const dayOfWeek = DAYS_VALUES[index]
+                              const session = program.sessions.find((s) => s.dayOfWeek === dayOfWeek)
                               return (
                                 <div
-                                  key={dayIndex}
+                                  key={index}
                                   className={`p-2 rounded text-center text-xs ${
                                     session
                                       ? "bg-primary text-primary-foreground"
@@ -1111,6 +1116,7 @@ export function SportPage() {
                                   <div className="font-semibold">{day}</div>
                                   {session && (
                                     <>
+                                      {session.time && <div className="text-xs opacity-80">{session.time}</div>}
                                       <div className="mt-1 truncate">
                                         {session.type === "other" && session.customType
                                           ? session.customType
@@ -1191,6 +1197,98 @@ export function SportPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Saisie rapide */}
+              <div className="space-y-3">
+                <h4 className="font-medium">Saisie rapide</h4>
+                <div className="flex flex-wrap gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setNewMeal({
+                        name: "Petit-déjeuner",
+                        time: "08:00",
+                        calories: 350,
+                        protein: 15,
+                        carbs: 45,
+                        fats: 12
+                      })
+                      setShowMealForm(true)
+                    }}
+                  >
+                    🥐 Petit-déj
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setNewMeal({
+                        name: "Déjeuner",
+                        time: "12:30",
+                        calories: 550,
+                        protein: 25,
+                        carbs: 60,
+                        fats: 18
+                      })
+                      setShowMealForm(true)
+                    }}
+                  >
+                    🍽️ Déjeuner
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setNewMeal({
+                        name: "Collation 16h",
+                        time: "16:00", 
+                        calories: 200,
+                        protein: 8,
+                        carbs: 25,
+                        fats: 8
+                      })
+                      setShowMealForm(true)
+                    }}
+                  >
+                    🍎 16h
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setNewMeal({
+                        name: "Dîner",
+                        time: "19:30",
+                        calories: 500,
+                        protein: 30,
+                        carbs: 40,
+                        fats: 20
+                      })
+                      setShowMealForm(true)
+                    }}
+                  >
+                    🍖 Dîner
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setNewMeal({
+                        name: "Œufs bacon",
+                        time: "08:00",
+                        calories: 420,
+                        protein: 28,
+                        carbs: 5,
+                        fats: 32
+                      })
+                      setShowMealForm(true)
+                    }}
+                  >
+                    🥓 Œufs bacon
+                  </Button>
+                </div>
+              </div>
+              
               {showMealForm && (
                 <div className="p-4 border rounded-lg space-y-4 bg-muted/50">
                   <h3 className="font-semibold">{editingMeal ? "Modifier le repas" : "Ajouter un repas"}</h3>
@@ -1730,7 +1828,7 @@ export function SportPage() {
                     >
                       <div className="flex items-center gap-4">
                         <div className="font-semibold min-w-16">
-                          {["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"][session.dayOfWeek]}
+                          {DAYS_ORDER[DAYS_VALUES.indexOf(session.dayOfWeek)] || "?"}
                         </div>
                         <div>
                           <div className="font-medium">
@@ -1739,7 +1837,7 @@ export function SportPage() {
                               : activityTypeLabels[session.type]}
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            {session.duration} min • {session.intensity === "light" ? "Légère" : session.intensity === "moderate" ? "Modérée" : "Intense"}
+                            {session.time && `${session.time} • `}{session.duration} min • {session.intensity === "light" ? "Légère" : session.intensity === "moderate" ? "Modérée" : "Intense"}
                           </div>
                         </div>
                       </div>
@@ -1771,13 +1869,13 @@ export function SportPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="0">Dimanche</SelectItem>
                         <SelectItem value="1">Lundi</SelectItem>
                         <SelectItem value="2">Mardi</SelectItem>
                         <SelectItem value="3">Mercredi</SelectItem>
                         <SelectItem value="4">Jeudi</SelectItem>
                         <SelectItem value="5">Vendredi</SelectItem>
                         <SelectItem value="6">Samedi</SelectItem>
+                        <SelectItem value="0">Dimanche</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1832,23 +1930,34 @@ export function SportPage() {
                   </div>
 
                   <div>
-                    <Label>Intensité</Label>
-                    <Select
-                      value={newProgramSession.intensity}
-                      onValueChange={(value) =>
-                        setNewProgramSession({ ...newProgramSession, intensity: value as any })
+                    <Label>Heure (facultatif)</Label>
+                    <Input
+                      type="time"
+                      value={newProgramSession.time || ""}
+                      onChange={(e) =>
+                        setNewProgramSession({ ...newProgramSession, time: e.target.value })
                       }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="light">Légère</SelectItem>
-                        <SelectItem value="moderate">Modérée</SelectItem>
-                        <SelectItem value="intense">Intense</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    />
                   </div>
+                </div>
+
+                <div>
+                  <Label>Intensité</Label>
+                  <Select
+                    value={newProgramSession.intensity}
+                    onValueChange={(value) =>
+                      setNewProgramSession({ ...newProgramSession, intensity: value as any })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="light">Légère</SelectItem>
+                      <SelectItem value="moderate">Modérée</SelectItem>
+                      <SelectItem value="intense">Intense</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>

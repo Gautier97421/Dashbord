@@ -117,26 +117,28 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const [resizeStart, setResizeStart] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [resizeType, setResizeType] = useState<'width' | 'height' | 'both' | null>(null)
 
-  // Initialize widgets from store or defaults
-  const [widgets, setWidgets] = useState<DashboardWidget[]>(
-    (state.dashboardWidgets || []).length > 0 ? state.dashboardWidgets : DEFAULT_DASHBOARD_WIDGETS
-  )
+  // Initialize widgets from store - only set defaults on first load if dashboardWidgets is undefined
+  const [widgets, setWidgets] = useState<DashboardWidget[]>(() => {
+    // If dashboardWidgets is undefined (never set), use defaults
+    if (state.dashboardWidgets === undefined) {
+      return DEFAULT_DASHBOARD_WIDGETS
+    }
+    // If it's an empty array (user deleted all), keep it empty
+    return state.dashboardWidgets
+  })
 
-  // Sync widgets with store data (and seed defaults for new users)
+  // Sync widgets with store data - only update when store changes, don't reset to defaults
   useEffect(() => {
-    if ((state.dashboardWidgets || []).length > 0) {
+    // If dashboardWidgets exists in state (even if empty), use it
+    if (state.dashboardWidgets !== undefined) {
       setWidgets(state.dashboardWidgets)
       return
     }
 
-    if (!isLoading && (state.dashboardWidgets || []).length === 0) {
-      setWidgets((prev) => {
-        if (prev.length === 0) {
-          updateDashboardWidgets(DEFAULT_DASHBOARD_WIDGETS)
-          return DEFAULT_DASHBOARD_WIDGETS
-        }
-        return prev
-      })
+    // Only seed defaults on first load if dashboardWidgets is still undefined
+    if (!isLoading && state.dashboardWidgets === undefined) {
+      updateDashboardWidgets(DEFAULT_DASHBOARD_WIDGETS)
+      setWidgets(DEFAULT_DASHBOARD_WIDGETS)
     }
   }, [state.dashboardWidgets, isLoading, updateDashboardWidgets])
 
