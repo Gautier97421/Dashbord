@@ -105,7 +105,7 @@ const DEFAULT_DASHBOARD_WIDGETS: DashboardWidget[] = [
 ]
 
 export function DashboardPage({ onNavigate }: DashboardPageProps) {
-  const { state, dispatch, isLoading, updateDashboardWidgets } = useApp()
+  const { state, dispatch, isLoading, updateDashboardWidgets, updateMission, logRoutine } = useApp()
   const today = getToday()
   const [showWidgetConfig, setShowWidgetConfig] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
@@ -237,16 +237,17 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     }
   }, [state.missions, state.tasks, state.projects, state.sleepLogs, state.workoutSessions])
 
-  const toggleRoutine = (actionId: string) => {
+  const toggleRoutine = async (actionId: string) => {
     const existingLog = todayLogs.find((l) => l.actionId === actionId)
-    dispatch({
-      type: "LOG_ROUTINE",
-      payload: {
-        id: existingLog?.id || generateId(),
-        actionId,
-        date: today,
-        completed: !existingLog?.completed,
-      },
+    await logRoutine(actionId, today, !existingLog?.completed)
+  }
+
+  const toggleMission = async (mission: any) => {
+    const newStatus = mission.status === "done" ? "todo" : "done"
+    await updateMission({
+      ...mission,
+      status: newStatus,
+      completedAt: newStatus === "done" ? new Date().toISOString() : undefined,
     })
   }
 
@@ -638,15 +639,20 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                     className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-muted/50"
                   >
                     <div className="flex items-center gap-3">
-                      {mission.status === "done" ? (
-                        <CheckCircle2 className="size-5 text-success" />
-                      ) : mission.status === "in-progress" ? (
-                        <Clock className="size-5 text-primary" />
-                      ) : (
-                        <Circle className="size-5 text-muted-foreground" />
-                      )}
+                      <button
+                        onClick={() => toggleMission(mission)}
+                        className="shrink-0 focus:outline-none"
+                      >
+                        {mission.status === "done" ? (
+                          <CheckCircle2 className="size-5 text-success" />
+                        ) : mission.status === "in-progress" ? (
+                          <Clock className="size-5 text-primary" />
+                        ) : (
+                          <Circle className="size-5 text-muted-foreground hover:text-primary" />
+                        )}
+                      </button>
                       <div>
-                        <p className="text-sm font-medium">{mission.title}</p>
+                        <p className={`text-sm font-medium ${mission.status === "done" ? "line-through text-muted-foreground" : ""}`}>{mission.title}</p>
                         {mission.description && (
                           <p className="text-xs text-muted-foreground line-clamp-1">{mission.description}</p>
                         )}

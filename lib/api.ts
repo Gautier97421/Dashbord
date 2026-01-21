@@ -65,8 +65,10 @@ export const api = {
   
   // DELETE request
   delete: <T>(endpoint: string, id?: string): Promise<T> => {
-    const url = id ? `${endpoint}?id=${id}` : endpoint
-    return makeRequest<T>(url, { method: 'DELETE' })
+    return makeRequest<T>(endpoint, {
+      method: 'DELETE',
+      body: id ? JSON.stringify({ id }) : undefined,
+    })
   },
 }
 

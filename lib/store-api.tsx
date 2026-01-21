@@ -17,6 +17,7 @@ import {
   WorkoutProgram,
   DashboardWidget,
   UserSettings,
+  FitnessProfile,
 } from './types'
 import * as api from './api'
 
@@ -811,7 +812,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Fitness Profile
   const updateFitnessProfile = useCallback(async (profile: any) => {
     try {
-      const updated = await api.fitnessProfileApi.createOrUpdate(profile)
+      const updated = await api.fitnessProfileApi.createOrUpdate(profile) as FitnessProfile
       dispatch({ type: "UPDATE_FITNESS_PROFILE", payload: updated })
     } catch (error) {
       console.error('Error updating fitness profile:', error)

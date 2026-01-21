@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Dumbbell, Plus, Trash2, TrendingUp, Apple, Trophy, User, Calendar as CalendarIcon, Droplets, Moon, Calendar, Clock, CheckCircle2 } from "lucide-react"
-import type { WorkoutSession, PersonalRecord, FitnessProfile, DailyNutrition, Meal, ActivityType, FitnessGoal, WorkoutProgram, WorkoutProgramSession, Mission, TimeFrame, Priority, TaskStatus } from "@/lib/types"
+import type { WorkoutSession, PersonalRecord, FitnessProfile, DailyNutrition, Meal, ActivityType, FitnessGoal, WorkoutProgram, WorkoutProgramSession, Mission, TimeFrame, Priority, TaskStatus, MealPreset } from "@/lib/types"
 
 // Ordre des jours : Lundi à Dimanche (dimanche en dernier)
 const DAYS_ORDER = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
@@ -33,6 +33,39 @@ export function SportPage() {
   const [selectedProgramId, setSelectedProgramId] = useState<string | null>(null)
   const [applyWeeks, setApplyWeeks] = useState(4)
   const [selectedDate, setSelectedDate] = useState(getToday())
+  const [nutritionView, setNutritionView] = useState<"today" | "history">("today")
+  const [nutritionMonth, setNutritionMonth] = useState(getToday().slice(0, 7)) // YYYY-MM
+  const [showPresetForm, setShowPresetForm] = useState(false)
+  const [editingPreset, setEditingPreset] = useState<MealPreset | null>(null)
+  
+  // Meal presets stockés localement (pourrait être persisté plus tard)
+  const [mealPresets, setMealPresets] = useState<MealPreset[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('mealPresets')
+      if (saved) return JSON.parse(saved)
+    }
+    return [
+      { id: "1", name: "Petit-déj", category: "breakfast", calories: 450, protein: 20, carbs: 50, fats: 18 },
+      { id: "2", name: "Déjeuner", category: "lunch", calories: 600, protein: 35, carbs: 55, fats: 22 },
+      { id: "3", name: "Dîner", category: "dinner", calories: 500, protein: 30, carbs: 40, fats: 20 },
+    ]
+  })
+  
+  const [newPreset, setNewPreset] = useState<Partial<MealPreset>>({
+    name: "",
+    category: "breakfast",
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fats: 0,
+  })
+
+  // Sauvegarder les presets dans localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mealPresets', JSON.stringify(mealPresets))
+    }
+  }, [mealPresets])
 
   // Nettoyer automatiquement les entraînements passés non complétés
   useEffect(() => {
@@ -117,20 +150,20 @@ export function SportPage() {
       light: 1.375,
       moderate: 1.55,
       active: 1.725,
-      "very-active": 1.9,
+      very_active: 1.9,
     }
 
     let calories = bmr * activityFactors[profile.activityLevel]
 
     // Ajustement selon l'objectif
-    if (profile.goal === "weight-loss") {
+    if (profile.goal === "weight_loss") {
       calories -= 500 // Déficit de 500 cal pour perdre ~0.5kg/semaine
-    } else if (profile.goal === "muscle-gain") {
+    } else if (profile.goal === "muscle_gain") {
       calories += 300 // Surplus de 300 cal pour prise de masse
     }
 
     // Répartition des macros
-    const protein = profile.goal === "muscle-gain" ? profile.weight * 2.2 : profile.weight * 1.8
+    const protein = profile.goal === "muscle_gain" ? profile.weight * 2.2 : profile.weight * 1.8
     const fats = calories * 0.25 / 9 // 25% des calories en lipides
     const carbs = (calories - (protein * 4) - (fats * 9)) / 4
 
@@ -269,11 +302,27 @@ export function SportPage() {
   const generateProgramWorkouts = (program: WorkoutProgram, startDate: string, weeks: number = 4) => {
     const workouts: WorkoutSession[] = []
     const start = new Date(startDate)
-
+    
     for (let week = 0; week < weeks; week++) {
       program.sessions.forEach((session) => {
-        const date = new Date(start)
-        date.setDate(start.getDate() + week * 7 + (session.dayOfWeek - start.getDay() + 7) % 7)
+        // Trouver la prochaine occurrence du jour de la semaine
+        const targetDay = session.dayOfWeek // 1=Lun, 2=Mar, 3=Mer, 4=Jeu, 5=Ven, 6=Sam, 0=Dim
+        
+        // Calculer le début de la semaine courante (lundi)
+        const weekStart = new Date(start)
+        const currentDay = start.getDay() // 0=Dim, 1=Lun, 2=Mar, etc.
+        const daysToMonday = currentDay === 0 ? -6 : 1 - currentDay
+        weekStart.setDate(start.getDate() + daysToMonday + (week * 7))
+        
+        // Calculer le jour cible dans cette semaine
+        const date = new Date(weekStart)
+        if (targetDay === 0) {
+          // Dimanche = fin de semaine (lundi + 6)
+          date.setDate(weekStart.getDate() + 6)
+        } else {
+          // Lundi à Samedi (lundi + targetDay - 1)
+          date.setDate(weekStart.getDate() + targetDay - 1)
+        }
         
         const workout: WorkoutSession = {
           id: generateId(),
@@ -537,6 +586,80 @@ export function SportPage() {
     dispatch({ type: "UPDATE_DAILY_NUTRITION", payload: updated })
   }
 
+  // Gestion des presets
+  const savePreset = () => {
+    if (!newPreset.name) return
+    
+    const preset: MealPreset = {
+      id: editingPreset?.id || generateId(),
+      name: newPreset.name!,
+      category: newPreset.category as "breakfast" | "lunch" | "snack" | "dinner",
+      calories: newPreset.calories || 0,
+      protein: newPreset.protein || 0,
+      carbs: newPreset.carbs || 0,
+      fats: newPreset.fats || 0,
+    }
+    
+    if (editingPreset) {
+      setMealPresets(mealPresets.map(p => p.id === preset.id ? preset : p))
+    } else {
+      setMealPresets([...mealPresets, preset])
+    }
+    
+    setShowPresetForm(false)
+    setEditingPreset(null)
+    setNewPreset({ name: "", category: "breakfast", calories: 0, protein: 0, carbs: 0, fats: 0 })
+  }
+  
+  const deletePreset = (presetId: string) => {
+    setMealPresets(mealPresets.filter(p => p.id !== presetId))
+  }
+  
+  const applyPreset = (preset: MealPreset) => {
+    const timeMap = {
+      breakfast: "08:00",
+      lunch: "12:30",
+      snack: "16:00",
+      dinner: "19:30",
+    }
+    setNewMeal({
+      name: preset.name,
+      time: timeMap[preset.category],
+      calories: preset.calories,
+      protein: preset.protein,
+      carbs: preset.carbs,
+      fats: preset.fats,
+    })
+    setShowMealForm(true)
+  }
+  
+  // Calcul des stats mensuelles
+  const getMonthlyNutritionStats = () => {
+    const [year, month] = nutritionMonth.split("-").map(Number)
+    const monthData = state.dailyNutrition.filter(n => {
+      const [nYear, nMonth] = n.date.split("-").map(Number)
+      return nYear === year && nMonth === month
+    })
+    
+    if (monthData.length === 0) return null
+    
+    const totalCalories = monthData.reduce((sum, d) => sum + d.calories, 0)
+    const totalProtein = monthData.reduce((sum, d) => sum + d.protein, 0)
+    const totalCarbs = monthData.reduce((sum, d) => sum + d.carbs, 0)
+    const totalFats = monthData.reduce((sum, d) => sum + d.fats, 0)
+    
+    return {
+      daysTracked: monthData.length,
+      avgCalories: Math.round(totalCalories / monthData.length),
+      avgProtein: Math.round(totalProtein / monthData.length),
+      avgCarbs: Math.round(totalCarbs / monthData.length),
+      avgFats: Math.round(totalFats / monthData.length),
+      totalCalories,
+      dailyData: monthData.sort((a, b) => a.date.localeCompare(b.date)),
+    }
+  }
+  
+  const monthlyStats = getMonthlyNutritionStats()
   // Statistiques - Ne compter QUE les entraînements passés ET complétés
   const today = getToday()
   const last30DaysWorkouts = state.workoutSessions.filter((w) => {
@@ -565,8 +688,8 @@ export function SportPage() {
   }
 
   const goalLabels = {
-    "weight-loss": "Perte de poids",
-    "muscle-gain": "Prise de masse",
+    weight_loss: "Perte de poids",
+    muscle_gain: "Prise de masse",
     maintenance: "Maintenance",
   }
 
@@ -643,8 +766,8 @@ export function SportPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="weight-loss">Perte de poids</SelectItem>
-                  <SelectItem value="muscle-gain">Prise de masse</SelectItem>
+                  <SelectItem value="weight_loss">Perte de poids</SelectItem>
+                  <SelectItem value="muscle_gain">Prise de masse</SelectItem>
                   <SelectItem value="maintenance">Maintenance</SelectItem>
                 </SelectContent>
               </Select>
@@ -664,7 +787,7 @@ export function SportPage() {
                   <SelectItem value="light">Léger (1-3 jours/semaine)</SelectItem>
                   <SelectItem value="moderate">Modéré (3-5 jours/semaine)</SelectItem>
                   <SelectItem value="active">Actif (6-7 jours/semaine)</SelectItem>
-                  <SelectItem value="very-active">Très actif (2x par jour)</SelectItem>
+                  <SelectItem value="very_active">Très actif (2x par jour)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -813,7 +936,7 @@ export function SportPage() {
                       <div
                         key={index}
                         className={`
-                          min-h-28 p-2 border-t border-r relative hover:bg-accent/50 transition-colors
+                          min-h-28 p-2 border-t border-r relative group/day hover:bg-accent/50 transition-colors
                           ${!day.isCurrentMonth ? "bg-muted/30 text-muted-foreground" : ""}
                           ${isToday ? "bg-primary/5 ring-2 ring-primary ring-inset" : ""}
                           ${workouts.length > 0 ? "bg-green-50 dark:bg-green-950/20" : ""}
@@ -881,7 +1004,7 @@ export function SportPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="absolute bottom-1 right-1 h-6 w-6 opacity-50 hover:opacity-100 transition-opacity bg-background/80 hover:bg-background"
+                          className="absolute bottom-1 right-1 h-6 w-6 opacity-0 group-hover/day:opacity-100 transition-opacity bg-green-500 hover:bg-green-600 text-white shadow-md border-2 border-white"
                           onClick={(e) => {
                             e.stopPropagation()
                             setNewWorkout({
@@ -1046,10 +1169,10 @@ export function SportPage() {
                             <Button
                               variant={program.active ? "default" : "outline"}
                               size="sm"
-                              onClick={() => {
-                                dispatch({
-                                  type: "UPDATE_WORKOUT_PROGRAM",
-                                  payload: { ...program, active: !program.active },
+                              onClick={async () => {
+                                await updateWorkoutProgram({
+                                  ...program,
+                                  active: !program.active,
                                 })
                               }}
                             >
@@ -1187,107 +1310,143 @@ export function SportPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Repas d'aujourd'hui</CardTitle>
-                  <CardDescription>{new Date().toLocaleDateString("fr-FR", { dateStyle: "full" })}</CardDescription>
+                  <CardTitle>Nutrition</CardTitle>
+                  <CardDescription>Suivi de votre alimentation</CardDescription>
                 </div>
-                <Button onClick={() => setShowMealForm(!showMealForm)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Ajouter un repas
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    variant={nutritionView === "today" ? "default" : "outline"} 
+                    size="sm"
+                    onClick={() => setNutritionView("today")}
+                  >
+                    Aujourd'hui
+                  </Button>
+                  <Button 
+                    variant={nutritionView === "history" ? "default" : "outline"} 
+                    size="sm"
+                    onClick={() => setNutritionView("history")}
+                  >
+                    Historique
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Saisie rapide */}
-              <div className="space-y-3">
-                <h4 className="font-medium">Saisie rapide</h4>
-                <div className="flex flex-wrap gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      setNewMeal({
-                        name: "Petit-déjeuner",
-                        time: "08:00",
-                        calories: 350,
-                        protein: 15,
-                        carbs: 45,
-                        fats: 12
-                      })
-                      setShowMealForm(true)
-                    }}
-                  >
-                    🥐 Petit-déj
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      setNewMeal({
-                        name: "Déjeuner",
-                        time: "12:30",
-                        calories: 550,
-                        protein: 25,
-                        carbs: 60,
-                        fats: 18
-                      })
-                      setShowMealForm(true)
-                    }}
-                  >
-                    🍽️ Déjeuner
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      setNewMeal({
-                        name: "Collation 16h",
-                        time: "16:00", 
-                        calories: 200,
-                        protein: 8,
-                        carbs: 25,
-                        fats: 8
-                      })
-                      setShowMealForm(true)
-                    }}
-                  >
-                    🍎 16h
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      setNewMeal({
-                        name: "Dîner",
-                        time: "19:30",
-                        calories: 500,
-                        protein: 30,
-                        carbs: 40,
-                        fats: 20
-                      })
-                      setShowMealForm(true)
-                    }}
-                  >
-                    🍖 Dîner
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      setNewMeal({
-                        name: "Œufs bacon",
-                        time: "08:00",
-                        calories: 420,
-                        protein: 28,
-                        carbs: 5,
-                        fats: 32
-                      })
-                      setShowMealForm(true)
-                    }}
-                  >
-                    🥓 Œufs bacon
-                  </Button>
-                </div>
-              </div>
+              {nutritionView === "today" ? (
+                <>
+                  {/* Presets personnalisables */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium">Saisie rapide</h4>
+                      <Button variant="ghost" size="sm" onClick={() => {
+                        setNewPreset({ name: "", category: "breakfast", calories: 0, protein: 0, carbs: 0, fats: 0 })
+                        setEditingPreset(null)
+                        setShowPresetForm(!showPresetForm)
+                      }}>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Ajouter preset
+                      </Button>
+                    </div>
+                    
+                    {showPresetForm && (
+                      <div className="p-4 border rounded-lg space-y-4 bg-muted/50">
+                        <h4 className="font-semibold">{editingPreset ? "Modifier le preset" : "Nouveau preset"}</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label>Nom</Label>
+                            <Input
+                              placeholder="Ex: Omelette, Salade César..."
+                              value={newPreset.name}
+                              onChange={(e) => setNewPreset({ ...newPreset, name: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <Label>Catégorie</Label>
+                            <Select 
+                              value={newPreset.category} 
+                              onValueChange={(v) => setNewPreset({ ...newPreset, category: v as any })}
+                            >
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="breakfast">🥐 Petit-déjeuner</SelectItem>
+                                <SelectItem value="lunch">🍽️ Déjeuner</SelectItem>
+                                <SelectItem value="snack">🍎 Collation</SelectItem>
+                                <SelectItem value="dinner">🍖 Dîner</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-4 gap-4">
+                          <div>
+                            <Label>Calories</Label>
+                            <Input type="number" value={newPreset.calories} onChange={(e) => setNewPreset({ ...newPreset, calories: parseInt(e.target.value) || 0 })} />
+                          </div>
+                          <div>
+                            <Label>Protéines (g)</Label>
+                            <Input type="number" value={newPreset.protein} onChange={(e) => setNewPreset({ ...newPreset, protein: parseInt(e.target.value) || 0 })} />
+                          </div>
+                          <div>
+                            <Label>Glucides (g)</Label>
+                            <Input type="number" value={newPreset.carbs} onChange={(e) => setNewPreset({ ...newPreset, carbs: parseInt(e.target.value) || 0 })} />
+                          </div>
+                          <div>
+                            <Label>Lipides (g)</Label>
+                            <Input type="number" value={newPreset.fats} onChange={(e) => setNewPreset({ ...newPreset, fats: parseInt(e.target.value) || 0 })} />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button onClick={savePreset}>{editingPreset ? "Enregistrer" : "Créer"}</Button>
+                          <Button variant="outline" onClick={() => { setShowPresetForm(false); setEditingPreset(null) }}>Annuler</Button>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="flex flex-wrap gap-2">
+                      {mealPresets.map((preset) => (
+                        <div key={preset.id} className="group relative">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => applyPreset(preset)}
+                          >
+                            {preset.category === "breakfast" ? "🥐" : preset.category === "lunch" ? "🍽️" : preset.category === "snack" ? "🍎" : "🍖"} {preset.name}
+                          </Button>
+                          <div className="absolute -top-2 -right-2 hidden group-hover:flex gap-1">
+                            <button 
+                              className="p-1 rounded-full bg-muted border text-xs"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setNewPreset(preset)
+                                setEditingPreset(preset)
+                                setShowPresetForm(true)
+                              }}
+                            >
+                              ✏️
+                            </button>
+                            <button 
+                              className="p-1 rounded-full bg-destructive/10 border border-destructive/20 text-xs"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                deletePreset(preset.id)
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      {mealPresets.length === 0 && (
+                        <p className="text-sm text-muted-foreground">Aucun preset. Créez-en un pour la saisie rapide.</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end">
+                    <Button onClick={() => setShowMealForm(!showMealForm)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Repas personnalisé
+                    </Button>
+                  </div>
               
               {showMealForm && (
                 <div className="p-4 border rounded-lg space-y-4 bg-muted/50">
@@ -1409,6 +1568,137 @@ export function SportPage() {
                   </p>
                 ) : null}
               </div>
+              </>
+              ) : (
+                /* Vue Historique Mensuel */
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium">Historique mensuel</h4>
+                    <Input 
+                      type="month" 
+                      value={nutritionMonth}
+                      onChange={(e) => setNutritionMonth(e.target.value)}
+                      className="w-auto"
+                    />
+                  </div>
+                  
+                  {monthlyStats ? (
+                    <>
+                      {/* Stats du mois */}
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        <div className="p-4 rounded-lg border text-center">
+                          <p className="text-2xl font-bold text-primary">{monthlyStats.daysTracked}</p>
+                          <p className="text-sm text-muted-foreground">Jours suivis</p>
+                        </div>
+                        <div className="p-4 rounded-lg border text-center">
+                          <p className="text-2xl font-bold">{monthlyStats.avgCalories}</p>
+                          <p className="text-sm text-muted-foreground">Cal/jour moy.</p>
+                        </div>
+                        <div className="p-4 rounded-lg border text-center">
+                          <p className="text-2xl font-bold text-green-600">{monthlyStats.avgProtein}g</p>
+                          <p className="text-sm text-muted-foreground">Protéines/jour</p>
+                        </div>
+                        <div className="p-4 rounded-lg border text-center">
+                          <p className="text-2xl font-bold text-yellow-600">{monthlyStats.avgCarbs}g</p>
+                          <p className="text-sm text-muted-foreground">Glucides/jour</p>
+                        </div>
+                        <div className="p-4 rounded-lg border text-center">
+                          <p className="text-2xl font-bold text-orange-600">{monthlyStats.avgFats}g</p>
+                          <p className="text-sm text-muted-foreground">Lipides/jour</p>
+                        </div>
+                      </div>
+                      
+                      {/* Comparaison avec objectifs */}
+                      {recommendedMacros && (
+                        <div className="p-4 rounded-lg border bg-muted/50">
+                          <h5 className="font-medium mb-3">Comparaison avec vos objectifs</h5>
+                          <div className="grid grid-cols-4 gap-4">
+                            <div>
+                              <div className="flex justify-between text-sm mb-1">
+                                <span>Calories</span>
+                                <span className={monthlyStats.avgCalories >= recommendedMacros.calories * 0.9 && monthlyStats.avgCalories <= recommendedMacros.calories * 1.1 ? "text-green-600" : "text-orange-600"}>
+                                  {Math.round((monthlyStats.avgCalories / recommendedMacros.calories) * 100)}%
+                                </span>
+                              </div>
+                              <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-primary transition-all" 
+                                  style={{ width: `${Math.min(100, (monthlyStats.avgCalories / recommendedMacros.calories) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <div className="flex justify-between text-sm mb-1">
+                                <span>Protéines</span>
+                                <span className={monthlyStats.avgProtein >= recommendedMacros.protein * 0.9 ? "text-green-600" : "text-orange-600"}>
+                                  {Math.round((monthlyStats.avgProtein / recommendedMacros.protein) * 100)}%
+                                </span>
+                              </div>
+                              <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-green-500 transition-all" 
+                                  style={{ width: `${Math.min(100, (monthlyStats.avgProtein / recommendedMacros.protein) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <div className="flex justify-between text-sm mb-1">
+                                <span>Glucides</span>
+                                <span>{Math.round((monthlyStats.avgCarbs / recommendedMacros.carbs) * 100)}%</span>
+                              </div>
+                              <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-yellow-500 transition-all" 
+                                  style={{ width: `${Math.min(100, (monthlyStats.avgCarbs / recommendedMacros.carbs) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <div className="flex justify-between text-sm mb-1">
+                                <span>Lipides</span>
+                                <span>{Math.round((monthlyStats.avgFats / recommendedMacros.fats) * 100)}%</span>
+                              </div>
+                              <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-orange-500 transition-all" 
+                                  style={{ width: `${Math.min(100, (monthlyStats.avgFats / recommendedMacros.fats) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Liste des jours */}
+                      <div className="space-y-2">
+                        <h5 className="font-medium">Détail par jour</h5>
+                        <div className="max-h-96 overflow-y-auto space-y-2">
+                          {monthlyStats.dailyData.map((day) => (
+                            <div key={day.id} className="flex items-center justify-between p-3 rounded-lg border">
+                              <div>
+                                <p className="font-medium">
+                                  {new Date(day.date).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })}
+                                </p>
+                                <p className="text-sm text-muted-foreground">{day.meals.length} repas</p>
+                              </div>
+                              <div className="flex gap-3 text-sm">
+                                <span className="px-2 py-1 rounded bg-primary/10">{day.calories} cal</span>
+                                <span className="px-2 py-1 rounded bg-green-500/10 text-green-600">P: {day.protein}g</span>
+                                <span className="px-2 py-1 rounded bg-yellow-500/10 text-yellow-600">G: {day.carbs}g</span>
+                                <span className="px-2 py-1 rounded bg-orange-500/10 text-orange-600">L: {day.fats}g</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">
+                      Aucune donnée de nutrition pour ce mois
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -1733,8 +2023,8 @@ export function SportPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="weight-loss">Perte de poids</SelectItem>
-                      <SelectItem value="muscle-gain">Prise de masse</SelectItem>
+                      <SelectItem value="weight_loss">Perte de poids</SelectItem>
+                      <SelectItem value="muscle_gain">Prise de masse</SelectItem>
                       <SelectItem value="maintenance">Maintenance</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1754,7 +2044,7 @@ export function SportPage() {
                       <SelectItem value="light">Léger</SelectItem>
                       <SelectItem value="moderate">Modéré</SelectItem>
                       <SelectItem value="active">Actif</SelectItem>
-                      <SelectItem value="very-active">Très actif</SelectItem>
+                      <SelectItem value="very_active">Très actif</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

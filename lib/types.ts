@@ -3,7 +3,7 @@ export type TaskStatus = "todo" | "in-progress" | "done"
 export type TimeFrame = "day" | "week" | "month" | "year"
 export type RoutineCategory = "health" | "sport" | "mental" | "work" | "personal"
 export type ActivityType = "gym" | "running" | "climbing" | "other"
-export type FitnessGoal = "weight-loss" | "muscle-gain" | "maintenance"
+export type FitnessGoal = "weight_loss" | "muscle_gain" | "maintenance"
 export type WidgetType =
   | "routine-progress"
   | "missions-stats"
@@ -171,12 +171,13 @@ export interface PersonalRecord {
 }
 
 export interface FitnessProfile {
+  id?: string
   age: number
   weight: number
   height: number
   gender: "male" | "female" | "other"
   goal: FitnessGoal
-  activityLevel: "sedentary" | "light" | "moderate" | "active" | "very-active"
+  activityLevel: "sedentary" | "light" | "moderate" | "active" | "very_active"
   targetWeight?: number
 }
 
@@ -194,6 +195,16 @@ export interface Meal {
   id: string
   name: string
   time: string
+  calories: number
+  protein: number
+  carbs: number
+  fats: number
+}
+
+export interface MealPreset {
+  id: string
+  name: string
+  category: "breakfast" | "lunch" | "snack" | "dinner"
   calories: number
   protein: number
   carbs: number

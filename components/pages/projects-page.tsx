@@ -42,7 +42,7 @@ import type { Project, Task, TaskStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 export function ProjectsPage() {
-  const { state, addProject, updateProject, deleteProject } = useApp()
+  const { state, addProject, updateProject, deleteProject, addTask: addTaskApi, updateTask, deleteTask } = useApp()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
@@ -99,6 +99,7 @@ export function ProjectsPage() {
         title: newProject.title!,
         description: newProject.description,
         objectives: newProject.objectives || [],
+        tasks: [],
         deadline: newProject.deadline,
       })
     }
@@ -141,7 +142,7 @@ export function ProjectsPage() {
   const toggleProjectComplete = async (project: Project) => {
     await updateProject({
       ...project,
-      completedAt: project.completedAt ? null : new Date().toISOString(),
+      completedAt: project.completedAt ? undefined : new Date().toISOString(),
     })
   }
 
@@ -190,49 +191,26 @@ export function ProjectsPage() {
 
     const newStatus = task.status === "done" ? "todo" : "done"
     
-    await fetch("/api/tasks", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: taskId,
-        status: newStatus,
-        completedAt: newStatus === "done" ? new Date().toISOString() : null,
-      }),
+    await updateTask({
+      ...task,
+      status: newStatus,
+      completedAt: newStatus === "done" ? new Date().toISOString() : undefined,
     })
-
-    dispatch({ type: "UPDATE_TASK", payload: { ...task, status: newStatus, completedAt: newStatus === "done" ? new Date().toISOString() : null } })
   }
 
   const addTaskToProject = async (projectId: string, title: string) => {
     if (!title.trim()) return
 
-    const response = await fetch("/api/tasks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title,
-        priority: "medium",
-        status: "todo",
-        projectId,
-      }),
+    await addTaskApi({
+      title,
+      priority: "medium",
+      status: "todo",
+      projectId,
     })
-
-    if (response.ok) {
-      const newTask = await response.json()
-      dispatch({ type: "ADD_TASK", payload: newTask })
-    }
   }
 
   const deleteTaskFromProject = async (projectId: string, taskId: string) => {
-    const response = await fetch("/api/tasks", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: taskId }),
-    })
-
-    if (response.ok) {
-      dispatch({ type: "DELETE_TASK", payload: taskId })
-    }
+    await deleteTask(taskId)
   }
 
   const renderProjectCard = (project: Project) => {
@@ -561,9 +539,9 @@ export function ProjectsPage() {
                 <div className="mt-4">
                   <div className="flex items-center justify-between text-sm mb-2">
                     <span>Progression globale</span>
-                    <span className="font-medium">{getProjectProgress(selectedProject)}%</span>
+                    <span className="font-medium">{getProjectProgress(selectedProject.id)}%</span>
                   </div>
-                  <Progress value={getProjectProgress(selectedProject)} className="h-3" />
+                  <Progress value={getProjectProgress(selectedProject.id)} className="h-3" />
                 </div>
               </CardHeader>
 
