@@ -338,7 +338,7 @@ export function SportPage() {
   }
 
   const addProgramSession = () => {
-    if (!newProgramSession.dayOfWeek || !newProgramSession.type || !newProgramSession.duration) return
+    if (newProgramSession.dayOfWeek === undefined || !newProgramSession.type || !newProgramSession.duration) return
 
     const session: WorkoutProgramSession = {
       id: generateId(),

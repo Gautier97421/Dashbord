@@ -375,7 +375,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           name: project.title,
           title: project.title,
           description: project.description,
-          color: project.color,
+          color: "#3B82F6", // Default color since not in database
           objectives: Array.isArray(project.objectives) ? project.objectives : [],
           deadline: project.deadline ? new Date(project.deadline).toISOString() : undefined,
           completedAt: project.completedAt ? new Date(project.completedAt).toISOString() : undefined,
