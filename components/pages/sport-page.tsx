@@ -20,7 +20,7 @@ const DAYS_VALUES = [1, 2, 3, 4, 5, 6, 0] // dayOfWeek correspondant (dimanche =
 const DAYS_FULL = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
 export function SportPage() {
-  const { state, dispatch, updateFitnessProfile, addWorkoutProgram, updateWorkoutProgram, deleteWorkoutProgram, addWorkout, updateWorkout, deleteWorkout, addMission } = useApp()
+  const { state, dispatch, updateFitnessProfile, addWorkoutProgram, updateWorkoutProgram, deleteWorkoutProgram, addMission } = useApp()
   const [activeTab, setActiveTab] = useState("workouts")
   const [showWorkoutForm, setShowWorkoutForm] = useState(false)
   const [showPRForm, setShowPRForm] = useState(false)
