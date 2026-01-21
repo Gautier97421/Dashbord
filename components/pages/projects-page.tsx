@@ -80,15 +80,17 @@ export function ProjectsPage() {
     if (editingProject) {
       await updateProject({
         ...editingProject,
-        name: newProject.title!,
+        title: newProject.title!,
         description: newProject.description,
-        color: editingProject.color || "#3B82F6",
+        objectives: newProject.objectives || [],
+        deadline: newProject.deadline,
       })
     } else {
       await addProject({
-        name: newProject.title!,
+        title: newProject.title!,
         description: newProject.description,
-        color: "#3B82F6",
+        objectives: newProject.objectives || [],
+        deadline: newProject.deadline,
       })
     }
 

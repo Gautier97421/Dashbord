@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { title, description, objectives, deadline } = body
+    const { title, description, objectives, deadline, color } = body
 
     const project = await prisma.project.create({
       data: {
@@ -55,6 +55,7 @@ export async function POST(request: Request) {
         description,
         objectives: objectives || [],
         deadline: deadline ? new Date(deadline) : undefined,
+        color: color || "#3B82F6",
       },
       include: {
         tasks: true,
@@ -83,7 +84,7 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json()
-    const { id, title, description, objectives, deadline, completedAt } = body
+    const { id, title, description, objectives, deadline, completedAt, color } = body
 
     const project = await prisma.project.update({
       where: { id },
@@ -93,6 +94,7 @@ export async function PUT(request: Request) {
         objectives,
         deadline: deadline ? new Date(deadline) : undefined,
         completedAt: completedAt ? new Date(completedAt) : undefined,
+        color,
       },
       include: {
         tasks: true,

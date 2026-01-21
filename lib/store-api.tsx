@@ -372,11 +372,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })),
         projects: projects.map((project: any) => ({
           id: project.id,
-          name: project.name,
-          title: project.name,
+          name: project.title,
+          title: project.title,
           description: project.description,
           color: project.color,
           objectives: Array.isArray(project.objectives) ? project.objectives : [],
+          deadline: project.deadline ? new Date(project.deadline).toISOString() : undefined,
           completedAt: project.completedAt ? new Date(project.completedAt).toISOString() : undefined,
           tasks: Array.isArray(project.tasks) ? project.tasks.map((task: any) => ({
             id: task.id,
