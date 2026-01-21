@@ -195,24 +195,213 @@ export function NotesPage() {
       const margin = 20
       const maxWidth = pageWidth - 2 * margin
       let yPosition = margin
+      const lineHeight = 7
+      const fontSize = 12
 
-      // Contenu - extraire le texte de l'HTML
-      const tempDiv = document.createElement('div')
-      tempDiv.innerHTML = editorRef.current.innerHTML
-      const textContent = tempDiv.textContent || tempDiv.innerText || ''
-      
-      // Ajouter le contenu avec retour à la ligne automatique
-      doc.setFontSize(12)
-      const contentLines = doc.splitTextToSize(textContent, maxWidth)
-      
-      contentLines.forEach((line: string) => {
-        if (yPosition + 7 > pageHeight - margin) {
+      // Fonction pour vérifier si nouvelle page nécessaire
+      const checkNewPage = (extraSpace = 0) => {
+        if (yPosition + lineHeight + extraSpace > pageHeight - margin) {
           doc.addPage()
           yPosition = margin
         }
-        doc.text(line, margin, yPosition)
-        yPosition += 7
-      })
+      }
+
+      // Fonction pour parser et rendre le HTML avec formatage
+      const renderFormattedContent = (element: Element | ChildNode) => {
+        const children = element.childNodes
+
+        children.forEach((node) => {
+          if (node.nodeType === Node.TEXT_NODE) {
+            // Noeud texte simple
+            const text = node.textContent || ''
+            if (text.trim()) {
+              doc.setFontSize(fontSize)
+              const lines = doc.splitTextToSize(text, maxWidth)
+              lines.forEach((line: string) => {
+                checkNewPage()
+                doc.text(line, margin, yPosition)
+                yPosition += lineHeight
+              })
+            }
+          } else if (node.nodeType === Node.ELEMENT_NODE) {
+            const el = node as HTMLElement
+            const tagName = el.tagName.toLowerCase()
+
+            // Gestion des retours à la ligne
+            if (tagName === 'br') {
+              yPosition += lineHeight * 0.5
+              return
+            }
+
+            // Gestion des paragraphes et divs
+            if (tagName === 'p' || tagName === 'div') {
+              // Ajouter un espace avant le paragraphe
+              if (yPosition > margin + 20) {
+                yPosition += lineHeight * 0.3
+              }
+              
+              // Détecter l'alignement
+              const style = el.getAttribute('style') || ''
+              let align: 'left' | 'center' | 'right' = 'left'
+              if (style.includes('text-align: center') || style.includes('text-align:center')) {
+                align = 'center'
+              } else if (style.includes('text-align: right') || style.includes('text-align:right')) {
+                align = 'right'
+              }
+              
+              // Traiter le contenu du paragraphe avec formatage inline
+              renderInlineContent(el, align)
+              
+              // Espace après le paragraphe
+              yPosition += lineHeight * 0.3
+              return
+            }
+
+            // Récursion pour autres éléments
+            renderFormattedContent(node)
+          }
+        })
+      }
+
+      // Fonction pour gérer le contenu inline (bold, italic, underline, alignment)
+      const renderInlineContent = (element: HTMLElement, textAlign: 'left' | 'center' | 'right' = 'left') => {
+        let currentX = margin
+        const lineContent: Array<{text: string, bold: boolean, italic: boolean, underline: boolean}> = []
+        
+        // Collecter tout le contenu avec ses styles
+        const collectContent = (el: Element | ChildNode, styles: {bold: boolean, italic: boolean, underline: boolean}) => {
+          el.childNodes.forEach((node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+              const text = node.textContent || ''
+              if (text) {
+                lineContent.push({
+                  text,
+                  bold: styles.bold,
+                  italic: styles.italic,
+                  underline: styles.underline
+                })
+              }
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+              const childEl = node as HTMLElement
+              const tag = childEl.tagName.toLowerCase()
+              const newStyles = {
+                bold: styles.bold || tag === 'b' || tag === 'strong',
+                italic: styles.italic || tag === 'i' || tag === 'em',
+                underline: styles.underline || tag === 'u'
+              }
+              
+              if (tag === 'br') {
+                lineContent.push({text: '\n', bold: false, italic: false, underline: false})
+              } else {
+                collectContent(childEl, newStyles)
+              }
+            }
+          })
+        }
+
+        collectContent(element, {bold: false, italic: false, underline: false})
+
+        // Rendre le contenu collecté
+        let currentLine = ''
+        let currentStyles: Array<{text: string, bold: boolean, italic: boolean, underline: boolean}> = []
+
+        const flushLine = () => {
+          if (currentStyles.length === 0) return
+          
+          checkNewPage()
+          
+          // Calculer la largeur totale de la ligne
+          let totalLineWidth = 0
+          currentStyles.forEach((segment) => {
+            let fontStyle = 'normal'
+            if (segment.bold && segment.italic) fontStyle = 'bolditalic'
+            else if (segment.bold) fontStyle = 'bold'
+            else if (segment.italic) fontStyle = 'italic'
+            doc.setFont('helvetica', fontStyle)
+            doc.setFontSize(fontSize)
+            totalLineWidth += doc.getTextWidth(segment.text)
+          })
+          
+          // Calculer la position X en fonction de l'alignement
+          if (textAlign === 'center') {
+            currentX = margin + (maxWidth - totalLineWidth) / 2
+          } else if (textAlign === 'right') {
+            currentX = margin + maxWidth - totalLineWidth
+          } else {
+            currentX = margin
+          }
+          
+          currentStyles.forEach((segment) => {
+            // Définir le style de police
+            let fontStyle = 'normal'
+            if (segment.bold && segment.italic) {
+              fontStyle = 'bolditalic'
+            } else if (segment.bold) {
+              fontStyle = 'bold'
+            } else if (segment.italic) {
+              fontStyle = 'italic'
+            }
+            
+            doc.setFontSize(fontSize)
+            doc.setFont('helvetica', fontStyle)
+            
+            const textWidth = doc.getTextWidth(segment.text)
+            doc.text(segment.text, currentX, yPosition)
+            
+            // Dessiner le soulignement
+            if (segment.underline) {
+              doc.setLineWidth(0.3)
+              doc.line(currentX, yPosition + 1, currentX + textWidth, yPosition + 1)
+            }
+            
+            currentX += textWidth
+          })
+          
+          yPosition += lineHeight
+          currentStyles = []
+        }
+
+        // Traiter chaque segment
+        lineContent.forEach((segment) => {
+          if (segment.text === '\n') {
+            flushLine()
+            return
+          }
+
+          // Calculer si le texte rentre sur la ligne actuelle
+          doc.setFontSize(fontSize)
+          const words = segment.text.split(' ')
+          
+          words.forEach((word, idx) => {
+            const wordWithSpace = idx < words.length - 1 ? word + ' ' : word
+            const wordWidth = doc.getTextWidth(wordWithSpace)
+            const currentLineWidth = currentStyles.reduce((acc, s) => acc + doc.getTextWidth(s.text), 0)
+            
+            if (currentLineWidth + wordWidth > maxWidth && currentStyles.length > 0) {
+              flushLine()
+            }
+            
+            currentStyles.push({
+              text: wordWithSpace,
+              bold: segment.bold,
+              italic: segment.italic,
+              underline: segment.underline
+            })
+          })
+        })
+
+        // Flush le reste
+        flushLine()
+      }
+
+      // Créer un élément temporaire pour parser le HTML
+      const tempDiv = document.createElement('div')
+      tempDiv.innerHTML = editorRef.current.innerHTML
+
+      // Rendre le contenu formaté
+      doc.setFontSize(fontSize)
+      doc.setFont('helvetica', 'normal')
+      renderFormattedContent(tempDiv)
 
       // Télécharger le PDF
       const fileName = `${currentNote.title.replace(/[^a-z0-9]/gi, '_')}.pdf`
@@ -375,37 +564,13 @@ export function NotesPage() {
 
       {/* Empty State */}
       {filteredNotes.length === 0 && (
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 grid-cols-1">
           <Card className="border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
                 onClick={() => setIsDialogOpen(true)}>
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
               <StickyNote className="size-8 text-muted-foreground mb-2" />
               <p className="text-sm font-medium text-muted-foreground">Note rapide</p>
               <p className="text-xs text-muted-foreground mt-1">Capturez vos idées</p>
-              <Button className="mt-4" size="sm">
-                <Plus className="size-4 mr-2" />
-                Créer
-              </Button>
-            </CardContent>
-          </Card>
-          <Card className="border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
-                onClick={() => setIsDialogOpen(true)}>
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <StickyNote className="size-8 text-muted-foreground mb-2" />
-              <p className="text-sm font-medium text-muted-foreground">Liste de tâches</p>
-              <p className="text-xs text-muted-foreground mt-1">Organisez votre journée</p>
-              <Button className="mt-4" size="sm">
-                <Plus className="size-4 mr-2" />
-                Créer
-              </Button>
-            </CardContent>
-          </Card>
-          <Card className="border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
-                onClick={() => setIsDialogOpen(true)}>
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <StickyNote className="size-8 text-muted-foreground mb-2" />
-              <p className="text-sm font-medium text-muted-foreground">Mémo important</p>
-              <p className="text-xs text-muted-foreground mt-1">Ne rien oublier</p>
               <Button className="mt-4" size="sm">
                 <Plus className="size-4 mr-2" />
                 Créer
