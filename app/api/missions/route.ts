@@ -83,6 +83,15 @@ export async function PUT(request: Request) {
     const body = await request.json()
     const { id, title, description, timeFrame, priority, status, dueDate, completedAt, tasks } = body
 
+    // Vérifier que la mission appartient à l'utilisateur
+    const existingMission = await prisma.mission.findFirst({
+      where: { id, userId: user.id },
+    })
+
+    if (!existingMission) {
+      return NextResponse.json({ error: 'Mission not found or unauthorized' }, { status: 404 })
+    }
+
     // Update mission
     const mission = await prisma.mission.update({
       where: { id },
@@ -136,11 +145,30 @@ export async function PUT(request: Request) {
 // DELETE a mission
 export async function DELETE(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
 
     if (!id) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 })
+    }
+
+    // Vérifier que la mission appartient à l'utilisateur
+    const existingMission = await prisma.mission.findFirst({
+      where: { id, userId: user.id },
+    })
+
+    if (!existingMission) {
+      return NextResponse.json({ error: 'Mission not found or unauthorized' }, { status: 404 })
     }
 
     await prisma.mission.delete({

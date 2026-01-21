@@ -74,8 +74,27 @@ export async function POST(request: Request) {
 // PUT update a workout program
 export async function PUT(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const body = await request.json()
     const { id, name, description, sessions, active, autoCreateMissions } = body
+
+    // Vérifier que le programme appartient à l'utilisateur
+    const existingProgram = await prisma.workoutProgram.findFirst({
+      where: { id, userId: user.id },
+    })
+
+    if (!existingProgram) {
+      return NextResponse.json({ error: 'Program not found or unauthorized' }, { status: 404 })
+    }
 
     // Update the program and replace all sessions
     const program = await prisma.workoutProgram.update({
@@ -105,11 +124,30 @@ export async function PUT(request: Request) {
 // DELETE a workout program
 export async function DELETE(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
 
     if (!id) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 })
+    }
+
+    // Vérifier que le programme appartient à l'utilisateur
+    const existingProgram = await prisma.workoutProgram.findFirst({
+      where: { id, userId: user.id },
+    })
+
+    if (!existingProgram) {
+      return NextResponse.json({ error: 'Program not found or unauthorized' }, { status: 404 })
     }
 
     await prisma.workoutProgram.delete({

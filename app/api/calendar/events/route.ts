@@ -83,6 +83,15 @@ export async function PUT(request: Request) {
     const body = await request.json()
     const { id, title, date, startTime, endTime, priority, isRecurring, recurrencePattern, missionId, projectId, completed } = body
 
+    // Vérifier que l'événement appartient à l'utilisateur
+    const existingEvent = await prisma.calendarEvent.findFirst({
+      where: { id, userId: user.id },
+    })
+
+    if (!existingEvent) {
+      return NextResponse.json({ error: 'Event not found or unauthorized' }, { status: 404 })
+    }
+
     const event = await prisma.calendarEvent.update({
       where: { id },
       data: {
@@ -114,11 +123,25 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
 
     if (!id) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 })
+    }
+
+    // Vérifier que l'événement appartient à l'utilisateur
+    const existingEvent = await prisma.calendarEvent.findFirst({
+      where: { id, userId: user.id },
+    })
+
+    if (!existingEvent) {
+      return NextResponse.json({ error: 'Event not found or unauthorized' }, { status: 404 })
     }
 
     await prisma.calendarEvent.delete({

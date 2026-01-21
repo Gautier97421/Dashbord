@@ -17,6 +17,7 @@ import { SportPage } from "@/components/pages/sport-page"
 import { SleepPage } from "@/components/pages/sleep-page"
 import { StatisticsPage } from "@/components/pages/statistics-page"
 import { SettingsPage } from "@/components/pages/settings-page"
+import { NotesPage } from "@/components/pages/notes-page"
 
 function DashboardLayout() {
   const [currentPage, setCurrentPage] = useState<NavPage>("dashboard")
@@ -63,6 +64,8 @@ function DashboardLayout() {
         return <SleepPage />
       case "statistics":
         return <StatisticsPage />
+      case "notes":
+        return <NotesPage />
       case "settings":
         return <SettingsPage />
       default:
@@ -81,6 +84,7 @@ function DashboardLayout() {
       sport: "Sport & Nutrition",
       sleep: "Sommeil",
       statistics: "Statistiques",
+      notes: "Bloc-notes",
       settings: "Paramètres",
     }
     return titles[currentPage]

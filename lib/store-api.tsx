@@ -18,6 +18,7 @@ import {
   DashboardWidget,
   UserSettings,
   FitnessProfile,
+  Note,
 } from './types'
 import * as api from './api'
 
@@ -39,6 +40,7 @@ export const defaultState: AppState = {
   fitnessProfile: null,
   dailyNutrition: [],
   dashboardWidgets: [],
+  notes: [],
   settings: {
     theme: "light",
     dayStartHour: 6,
@@ -97,6 +99,10 @@ interface AppContextType {
   deleteCalendarEvent: (id: string) => Promise<void>
   // API actions for fitness profile
   updateFitnessProfile: (profile: any) => Promise<void>
+  // API actions for notes
+  addNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
+  updateNote: (note: Note) => Promise<void>
+  deleteNote: (id: string) => Promise<void>
   // API actions for settings
   updateSettings: (settings: Partial<UserSettings>) => void
 }
@@ -229,6 +235,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case "UPDATE_DASHBOARD_WIDGETS":
       return { ...state, dashboardWidgets: action.payload }
 
+    // Notes
+    case "ADD_NOTE":
+      return { ...state, notes: [...state.notes, action.payload] }
+    case "UPDATE_NOTE":
+      return { ...state, notes: state.notes.map(n => n.id === action.payload.id ? action.payload : n) }
+    case "DELETE_NOTE":
+      return { ...state, notes: state.notes.filter(n => n.id !== action.payload) }
+
     // Calendar Events
     case "ADD_EVENT":
       return { ...state, calendarEvents: [...state.calendarEvents, action.payload] }
@@ -297,6 +311,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dashboardWidgets,
         calendarEvents,
         fitnessProfile,
+        notes,
       ] = await Promise.all([
         api.routinesApi.getActions().catch(() => []) as Promise<any[]>,
         api.routinesApi.getLogs().catch(() => []) as Promise<any[]>,
@@ -311,6 +326,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         api.dashboardApi.getWidgets().catch(() => []) as Promise<any[]>,
         api.calendarApi.getAll().catch(() => []) as Promise<any[]>,
         api.fitnessProfileApi.get().catch(() => null) as Promise<any>,
+        api.notesApi.getAll().catch(() => []) as Promise<any[]>,
       ])
 
       // Transform Prisma data to match our types
@@ -452,6 +468,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           activityLevel: fitnessProfile.activityLevel,
           targetWeight: fitnessProfile.targetWeight,
         } : null,
+        notes: notes.map((note: any) => ({
+          id: note.id,
+          title: note.title,
+          content: note.content,
+          color: note.color,
+          pinned: note.pinned,
+          createdAt: new Date(note.createdAt).toISOString(),
+          updatedAt: new Date(note.updatedAt).toISOString(),
+        })),
       }
 
       dispatch({ type: "LOAD_STATE", payload: transformedState as AppState })
@@ -820,6 +845,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Notes
+  const addNote = useCallback(async (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      const newNote = await api.notesApi.create(note)
+      dispatch({ type: "ADD_NOTE", payload: transformApiData(newNote) })
+    } catch (error) {
+      console.error('Error adding note:', error)
+      throw error
+    }
+  }, [])
+
+  const updateNote = useCallback(async (note: Note) => {
+    try {
+      const updated = await api.notesApi.update(note)
+      dispatch({ type: "UPDATE_NOTE", payload: transformApiData(updated) })
+    } catch (error) {
+      console.error('Error updating note:', error)
+      throw error
+    }
+  }, [])
+
+  const deleteNote = useCallback(async (id: string) => {
+    try {
+      await api.notesApi.delete(id)
+      dispatch({ type: "DELETE_NOTE", payload: id })
+    } catch (error) {
+      console.error('Error deleting note:', error)
+      throw error
+    }
+  }, [])
+
   const contextValue: AppContextType = {
     state,
     dispatch,
@@ -867,6 +923,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteCalendarEvent,
     // Fitness profile
     updateFitnessProfile,
+    // Notes
+    addNote,
+    updateNote,
+    deleteNote,
     // Settings
     updateSettings,
   }

@@ -65,9 +65,9 @@ export const api = {
   
   // DELETE request
   delete: <T>(endpoint: string, id?: string): Promise<T> => {
-    return makeRequest<T>(endpoint, {
+    const url = id ? `${endpoint}?id=${encodeURIComponent(id)}` : endpoint
+    return makeRequest<T>(url, {
       method: 'DELETE',
-      body: id ? JSON.stringify({ id }) : undefined,
     })
   },
 }
@@ -151,4 +151,11 @@ export const fitnessProfileApi = {
   createOrUpdate: (profile: any) => api.post('/fitness-profile', profile),
   update: (profile: any) => api.put('/fitness-profile', profile),
   delete: () => api.delete('/fitness-profile'),
+}
+
+export const notesApi = {
+  getAll: () => api.get('/notes'),
+  create: (note: any) => api.post('/notes', note),
+  update: (note: any) => api.put('/notes', note),
+  delete: (id: string) => api.delete('/notes', id),
 }

@@ -33,6 +33,7 @@ import {
   Clock,
   Trash2,
   Edit,
+  Target,
   ChevronRight,
 } from "lucide-react"
 import { useApp } from "@/lib/store-api"
@@ -545,20 +546,23 @@ export function MissionsPage() {
             </div>
 
             {missionsByTimeFrame[tf.value].length === 0 && (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <p className="text-muted-foreground mb-4">
-                    Aucune mission pour cette période
-                  </p>
-                  <Button onClick={() => {
-                    setNewMission({ ...newMission, timeFrame: tf.value })
-                    setIsDialogOpen(true)
-                  }}>
-                    <Plus className="size-4 mr-2" />
-                    Créer une mission
-                  </Button>
-                </CardContent>
-              </Card>
+              <div className="grid gap-4 grid-cols-1">
+                <Card className="border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
+                      onClick={() => {
+                        setNewMission({ ...newMission, timeFrame: tf.value })
+                        setIsDialogOpen(true)
+                      }}>
+                  <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                    <Target className="size-8 text-muted-foreground mb-2" />
+                    <p className="text-sm font-medium text-muted-foreground">Mission principale</p>
+                    <p className="text-xs text-muted-foreground mt-1">Objectif important</p>
+                    <Button className="mt-4" size="sm">
+                      <Plus className="size-4 mr-2" />
+                      Créer
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
             )}
           </TabsContent>
         ))}

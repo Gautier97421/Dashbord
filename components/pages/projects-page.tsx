@@ -477,16 +477,20 @@ export function ProjectsPage() {
           </div>
 
           {activeProjects.length === 0 && (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-                <FolderOpen className="size-12 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground mb-4">Aucun projet actif</p>
-                <Button onClick={() => setIsDialogOpen(true)}>
-                  <Plus className="size-4 mr-2" />
-                  Créer un projet
-                </Button>
-              </CardContent>
-            </Card>
+            <div className="space-y-3">
+              <Card className="border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => setIsDialogOpen(true)}>
+                <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+                  <FolderOpen className="size-8 text-muted-foreground mb-2" />
+                  <p className="text-sm font-medium text-muted-foreground">Site web personnel</p>
+                  <p className="text-xs text-muted-foreground mt-1">Créez votre premier projet</p>
+                  <Button className="mt-4" size="sm">
+                    <Plus className="size-4 mr-2" />
+                    Créer
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {/* Completed Projects */}

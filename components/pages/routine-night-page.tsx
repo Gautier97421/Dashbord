@@ -183,12 +183,12 @@ export function RoutineNightPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Routine du soir</h1>
-          <p className="text-muted-foreground">Terminez votre journée en beauté</p>
+          <p className="text-sm text-muted-foreground">Terminez votre journée en beauté</p>
         </div>
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => { setEditingAction(null); setNewAction({ name: "", importance: "medium" }) }}>
+            <Button size="sm" className="sm:size-default w-full sm:w-auto" onClick={() => { setEditingAction(null); setNewAction({ name: "", importance: "medium" }) }}>
               <Plus className="size-4 mr-2" />
               Ajouter une action
             </Button>
@@ -260,7 +260,32 @@ export function RoutineNightPage() {
         <CardContent>
           <Progress value={routineProgress} className="h-3 mb-6" />
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {(!state.nightRoutineActions || state.nightRoutineActions.length === 0) ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Card className="border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => setIsDialogOpen(true)}>
+                <CardContent className="p-4 flex flex-col items-center justify-center text-center h-24">
+                  <Plus className="size-6 text-muted-foreground mb-1" />
+                  <p className="text-xs text-muted-foreground">Lecture 20min</p>
+                </CardContent>
+              </Card>
+              <Card className="border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => setIsDialogOpen(true)}>
+                <CardContent className="p-4 flex flex-col items-center justify-center text-center h-24">
+                  <Plus className="size-6 text-muted-foreground mb-1" />
+                  <p className="text-xs text-muted-foreground">Préparer le lendemain</p>
+                </CardContent>
+              </Card>
+              <Card className="border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => setIsDialogOpen(true)}>
+                <CardContent className="p-4 flex flex-col items-center justify-center text-center h-24">
+                  <Plus className="size-6 text-muted-foreground mb-1" />
+                  <p className="text-xs text-muted-foreground">Étirements</p>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {(state.nightRoutineActions || []).map((action) => {
               const log = todayLogs.find((l) => l.actionId === action.id)
               const isCompleted = log?.completed || false
@@ -336,12 +361,7 @@ export function RoutineNightPage() {
                 </div>
               )
             })}
-          </div>
-
-          {(!state.nightRoutineActions || state.nightRoutineActions.length === 0) && (
-            <p className="text-center text-muted-foreground py-8">
-              Aucune action dans votre routine du soir. Commencez par en ajouter une !
-            </p>
+            </div>
           )}
         </CardContent>
       </Card>

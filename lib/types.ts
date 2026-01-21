@@ -126,6 +126,17 @@ export interface SleepLog {
   notes?: string
 }
 
+// Notes
+export interface Note {
+  id: string
+  title: string
+  content: string
+  color?: string
+  pinned: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 // Sport & Fitness
 export interface WorkoutSession {
   id: string
@@ -252,6 +263,7 @@ export interface AppState {
   fitnessProfile: FitnessProfile | null
   dailyNutrition: DailyNutrition[]
   dashboardWidgets: DashboardWidget[]
+  notes: Note[]
   settings: UserSettings
 }
 
@@ -295,6 +307,9 @@ export type AppAction =
   | { type: "ADD_DAILY_NUTRITION"; payload: DailyNutrition }
   | { type: "UPDATE_DAILY_NUTRITION"; payload: DailyNutrition }
   | { type: "DELETE_DAILY_NUTRITION"; payload: string }
+  | { type: "ADD_NOTE"; payload: Note }
+  | { type: "UPDATE_NOTE"; payload: Note }
+  | { type: "DELETE_NOTE"; payload: string }
   | { type: "UPDATE_DASHBOARD_WIDGETS"; payload: DashboardWidget[] }
   | { type: "UPDATE_SETTINGS"; payload: Partial<UserSettings> }
   | { type: "LIKE_INSIGHT"; payload: string }

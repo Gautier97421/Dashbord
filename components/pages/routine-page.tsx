@@ -304,7 +304,32 @@ export function RoutinePage() {
         <CardContent>
           <Progress value={routineProgress} className="h-3 mb-4 sm:mb-6" />
 
-          <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+          {state.routineActions.length === 0 ? (
+            <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+              <Card className="border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => setIsDialogOpen(true)}>
+                <CardContent className="p-4 flex flex-col items-center justify-center text-center h-24">
+                  <Plus className="size-6 text-muted-foreground mb-1" />
+                  <p className="text-xs text-muted-foreground">Méditation matinale</p>
+                </CardContent>
+              </Card>
+              <Card className="border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => setIsDialogOpen(true)}>
+                <CardContent className="p-4 flex flex-col items-center justify-center text-center h-24">
+                  <Plus className="size-6 text-muted-foreground mb-1" />
+                  <p className="text-xs text-muted-foreground">Sport 30min</p>
+                </CardContent>
+              </Card>
+              <Card className="border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => setIsDialogOpen(true)}>
+                <CardContent className="p-4 flex flex-col items-center justify-center text-center h-24">
+                  <Plus className="size-6 text-muted-foreground mb-1" />
+                  <p className="text-xs text-muted-foreground">Petit-déjeuner sain</p>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {state.routineActions.map((action) => {
               const log = todayLogs.find((l) => l.actionId === action.id)
               const isCompleted = log?.completed || false
@@ -380,12 +405,7 @@ export function RoutinePage() {
                 </div>
               )
             })}
-          </div>
-
-          {state.routineActions.length === 0 && (
-            <p className="text-center text-muted-foreground py-8">
-              Aucune action dans votre routine. Commencez par en ajouter une !
-            </p>
+            </div>
           )}
         </CardContent>
       </Card>

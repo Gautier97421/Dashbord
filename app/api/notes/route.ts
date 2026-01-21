@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-// GET all workouts
+// GET all notes
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
@@ -16,22 +16,22 @@ export async function GET() {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const workouts = await prisma.workoutSession.findMany({
+    const notes = await prisma.note.findMany({
       where: { userId: user.id },
-      include: {
-        program: true,
-      },
-      orderBy: { date: 'desc' },
+      orderBy: [
+        { pinned: 'desc' },
+        { updatedAt: 'desc' },
+      ],
     })
     
-    return NextResponse.json(workouts)
+    return NextResponse.json(notes)
   } catch (error) {
-    console.error('Error fetching workout sessions:', error)
-    return NextResponse.json({ error: 'Failed to fetch workout sessions' }, { status: 500 })
+    console.error('Error fetching notes:', error)
+    return NextResponse.json({ error: 'Failed to fetch notes' }, { status: 500 })
   }
 }
 
-// POST create a new workout session
+// POST create a new note
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions)
@@ -45,31 +45,26 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { date, type, customType, duration, notes, intensity, completed, programId, missionId } = body
+    const { title, content, color, pinned } = body
 
-    const workout = await prisma.workoutSession.create({
+    const note = await prisma.note.create({
       data: {
         userId: user.id,
-        date,
-        type,
-        customType,
-        duration,
-        notes,
-        intensity,
-        completed,
-        programId,
-        missionId,
+        title,
+        content,
+        color,
+        pinned: pinned || false,
       },
     })
 
-    return NextResponse.json(workout, { status: 201 })
+    return NextResponse.json(note, { status: 201 })
   } catch (error) {
-    console.error('Error creating workout session:', error)
-    return NextResponse.json({ error: 'Failed to create workout session' }, { status: 500 })
+    console.error('Error creating note:', error)
+    return NextResponse.json({ error: 'Failed to create note' }, { status: 500 })
   }
 }
 
-// PUT update a workout session
+// PUT update a note
 export async function PUT(request: Request) {
   try {
     const session = await getServerSession(authOptions)
@@ -83,40 +78,32 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json()
-    const { id, date, type, customType, duration, notes, intensity, completed, programId, missionId } = body
+    const { id, title, content, color, pinned } = body
 
-    // Vérifier que le workout appartient à l'utilisateur
-    const existingWorkout = await prisma.workoutSession.findFirst({
-      where: { id, userId: user.id },
-    })
-
-    if (!existingWorkout) {
-      return NextResponse.json({ error: 'Workout not found or unauthorized' }, { status: 404 })
+    // Verify note belongs to user
+    const existingNote = await prisma.note.findFirst({ where: { id, userId: user.id } })
+    if (!existingNote) {
+      return NextResponse.json({ error: 'Note not found or unauthorized' }, { status: 404 })
     }
 
-    const workout = await prisma.workoutSession.update({
+    const note = await prisma.note.update({
       where: { id },
       data: {
-        date,
-        type,
-        customType,
-        duration,
-        notes,
-        intensity,
-        completed,
-        programId,
-        missionId,
+        title,
+        content,
+        color,
+        pinned,
       },
     })
 
-    return NextResponse.json(workout)
+    return NextResponse.json(note)
   } catch (error) {
-    console.error('Error updating workout session:', error)
-    return NextResponse.json({ error: 'Failed to update workout session' }, { status: 500 })
+    console.error('Error updating note:', error)
+    return NextResponse.json({ error: 'Failed to update note' }, { status: 500 })
   }
 }
 
-// DELETE a workout session
+// DELETE a note
 export async function DELETE(request: Request) {
   try {
     const session = await getServerSession(authOptions)
@@ -136,22 +123,19 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 })
     }
 
-    // Vérifier que le workout appartient à l'utilisateur
-    const existingWorkout = await prisma.workoutSession.findFirst({
-      where: { id, userId: user.id },
-    })
-
-    if (!existingWorkout) {
-      return NextResponse.json({ error: 'Workout not found or unauthorized' }, { status: 404 })
+    // Verify note belongs to user
+    const existingNote = await prisma.note.findFirst({ where: { id, userId: user.id } })
+    if (!existingNote) {
+      return NextResponse.json({ error: 'Note not found or unauthorized' }, { status: 404 })
     }
 
-    await prisma.workoutSession.delete({
+    await prisma.note.delete({
       where: { id },
     })
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting workout session:', error)
-    return NextResponse.json({ error: 'Failed to delete workout session' }, { status: 500 })
+    console.error('Error deleting note:', error)
+    return NextResponse.json({ error: 'Failed to delete note' }, { status: 500 })
   }
 }

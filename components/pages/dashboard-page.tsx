@@ -948,7 +948,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
       {enabledWidgets.length === 0 ? (
         <div className="grid gap-4 grid-cols-4 auto-rows-[200px]">
           {/* Aperçu des widgets par défaut en pointillés */}
-          <Card className="col-span-2 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+          <Card className="py-0 col-span-2 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
                 onClick={() => addWidget("today-missions")}>
             <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
               <Target className="size-8 text-muted-foreground mb-2" />
@@ -968,7 +968,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </CardContent>
           </Card>
           
-          <Card className="col-span-2 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+          <Card className="py-0 col-span-2 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
                 onClick={() => addWidget("tasks-stats")}>
             <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
               <CheckCircle2 className="size-8 text-muted-foreground mb-2" />
@@ -988,7 +988,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </CardContent>
           </Card>
 
-          <Card className="col-span-1 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+          <Card className="py-0 col-span-1 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
                 onClick={() => addWidget("routine-progress")}>
             <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
               <TrendingUp className="size-8 text-muted-foreground mb-2" />
@@ -1007,7 +1007,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </CardContent>
           </Card>
 
-          <Card className="col-span-1 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+          <Card className="py-0 col-span-1 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
                 onClick={() => addWidget("routine-streak")}>
             <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
               <Flame className="size-8 text-muted-foreground mb-2" />
@@ -1026,7 +1026,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </CardContent>
           </Card>
 
-          <Card className="col-span-2 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+          <Card className="py-0 col-span-2 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
                 onClick={() => addWidget("routine-list")}>
             <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
               <Clock className="size-8 text-muted-foreground mb-2" />
@@ -1046,7 +1046,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </CardContent>
           </Card>
 
-          <Card className="col-span-3 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+          <Card className="py-0 col-span-3 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
                 onClick={() => addWidget("projects-stats")}>
             <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
               <FolderKanban className="size-8 text-muted-foreground mb-2" />
@@ -1066,7 +1066,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </CardContent>
           </Card>
 
-          <Card className="col-span-1 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+          <Card className="py-0 col-span-1 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
                 onClick={() => addWidget("sleep-bedtime-cycles")}>
             <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
               <BedDouble className="size-8 text-muted-foreground mb-2" />
@@ -1085,7 +1085,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </CardContent>
           </Card>
           
-          <Card className="col-span-4 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+          <Card className="py-0 col-span-4 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
                 onClick={() => addWidget("workout-summary")}>
             <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
               <Dumbbell className="size-8 text-muted-foreground mb-2" />
@@ -1287,7 +1287,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <h3 className="font-semibold text-sm">Widgets actifs</h3>
-              {widgets.filter((w) => w.enabled).map((widget) => {
+              {widgets.filter((w) => w.enabled).length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">Aucun widget actif</p>
+              ) : (
+                widgets.filter((w) => w.enabled).map((widget) => {
                 const config = WIDGET_LABELS[widget.type]
                 const Icon = config.icon
                 return (
@@ -1312,7 +1315,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                     </Button>
                   </div>
                 )
-              })}
+              })
+              )}
             </div>
 
             <div className="space-y-2">

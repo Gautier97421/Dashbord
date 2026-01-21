@@ -1007,7 +1007,7 @@ export function SportPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="absolute bottom-1 right-1 h-6 w-6 opacity-0 group-hover/day:opacity-100 transition-opacity bg-green-500 hover:bg-green-600 text-white shadow-md border-2 border-white"
+                          className="absolute bottom-1 right-1 h-6 w-6 opacity-0 group-hover/day:opacity-100 transition-opacity bg-green-700 hover:bg-green-800 text-green-900 shadow-md"
                           onClick={(e) => {
                             e.stopPropagation()
                             setNewWorkout({

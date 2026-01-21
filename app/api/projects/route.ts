@@ -85,6 +85,15 @@ export async function PUT(request: Request) {
     const body = await request.json()
     const { id, title, description, objectives, deadline, completedAt } = body
 
+    // Vérifier que le projet appartient à l'utilisateur
+    const existingProject = await prisma.project.findFirst({
+      where: { id, userId: user.id },
+    })
+
+    if (!existingProject) {
+      return NextResponse.json({ error: 'Project not found or unauthorized' }, { status: 404 })
+    }
+
     const project = await prisma.project.update({
       where: { id },
       data: {
@@ -125,6 +134,15 @@ export async function DELETE(request: Request) {
 
     if (!id) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 })
+    }
+
+    // Vérifier que le projet appartient à l'utilisateur
+    const existingProject = await prisma.project.findFirst({
+      where: { id, userId: user.id },
+    })
+
+    if (!existingProject) {
+      return NextResponse.json({ error: 'Project not found or unauthorized' }, { status: 404 })
     }
 
     await prisma.project.delete({
