@@ -66,8 +66,24 @@ export async function POST(request: Request) {
 // PUT update a routine action
 export async function PUT(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const body = await request.json()
     const { id, name, category, importance } = body
+
+    // Verify routine belongs to user
+    const existingAction = await prisma.routineAction.findFirst({ where: { id, userId: user.id } })
+    if (!existingAction) {
+      return NextResponse.json({ error: 'Routine action not found' }, { status: 404 })
+    }
 
     const action = await prisma.routineAction.update({
       where: { id },
@@ -88,11 +104,27 @@ export async function PUT(request: Request) {
 // DELETE a routine action
 export async function DELETE(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
 
     if (!id) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 })
+    }
+
+    // Verify routine belongs to user
+    const existingAction = await prisma.routineAction.findFirst({ where: { id, userId: user.id } })
+    if (!existingAction) {
+      return NextResponse.json({ error: 'Routine action not found' }, { status: 404 })
     }
 
     await prisma.routineAction.delete({

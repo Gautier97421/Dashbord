@@ -812,14 +812,14 @@ export function SportPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Sport & Nutrition</h1>
-        <p className="text-muted-foreground">Suivez vos entraînements et votre alimentation</p>
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Sport & Nutrition</h1>
+        <p className="text-sm text-muted-foreground">Suivez vos entraînements et votre alimentation</p>
       </div>
 
       {/* Stats globales */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-2 sm:gap-4 grid-cols-2 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Entraînements (30j)</CardTitle>
@@ -865,26 +865,29 @@ export function SportPage() {
         </Card>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="workouts">
-            <Dumbbell className="mr-2 h-4 w-4" />
-            Entraînements
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
+        <TabsList className="grid w-full grid-cols-5 h-auto">
+          <TabsTrigger value="workouts" className="flex-col sm:flex-row gap-1 py-2 text-xs sm:text-sm">
+            <Dumbbell className="h-4 w-4" />
+            <span className="hidden sm:inline">Entraînements</span>
+            <span className="sm:hidden">Sport</span>
           </TabsTrigger>
-          <TabsTrigger value="programs">
-            <Calendar className="mr-2 h-4 w-4" />
-            Programmes
+          <TabsTrigger value="programs" className="flex-col sm:flex-row gap-1 py-2 text-xs sm:text-sm">
+            <Calendar className="h-4 w-4" />
+            <span className="hidden sm:inline">Programmes</span>
+            <span className="sm:hidden">Prog.</span>
           </TabsTrigger>
-          <TabsTrigger value="nutrition">
-            <Apple className="mr-2 h-4 w-4" />
-            Nutrition
+          <TabsTrigger value="nutrition" className="flex-col sm:flex-row gap-1 py-2 text-xs sm:text-sm">
+            <Apple className="h-4 w-4" />
+            <span className="hidden sm:inline">Nutrition</span>
+            <span className="sm:hidden">Nutri.</span>
           </TabsTrigger>
-          <TabsTrigger value="prs">
-            <Trophy className="mr-2 h-4 w-4" />
+          <TabsTrigger value="prs" className="flex-col sm:flex-row gap-1 py-2 text-xs sm:text-sm">
+            <Trophy className="h-4 w-4" />
             Records
           </TabsTrigger>
-          <TabsTrigger value="profile">
-            <User className="mr-2 h-4 w-4" />
+          <TabsTrigger value="profile" className="flex-col sm:flex-row gap-1 py-2 text-xs sm:text-sm">
+            <User className="h-4 w-4" />
             Profil
           </TabsTrigger>
         </TabsList>
@@ -1961,7 +1964,7 @@ export function SportPage() {
           </Card>
 
           <Dialog open={showProfileForm && !!state.fitnessProfile} onOpenChange={setShowProfileForm}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-[90vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Modifier mon profil</DialogTitle>
                 <DialogDescription>Mettez à jour vos informations pour des recommandations personnalisées</DialogDescription>
@@ -2062,7 +2065,7 @@ export function SportPage() {
 
       {/* Dialog pour créer un programme */}
       <Dialog open={showProgramForm} onOpenChange={setShowProgramForm}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[90vw] sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Créer un programme d'entraînement</DialogTitle>
             <DialogDescription>

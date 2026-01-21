@@ -43,6 +43,8 @@ import {
   Bed,
   Dumbbell,
   ArrowLeftRight,
+  FolderKanban,
+  BedDouble,
   ArrowUpDown,
   Trash2,
   Edit3,
@@ -878,23 +880,23 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Bonjour !</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Bonjour !</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
             {formatDateFr(new Date(), "full")} - Prêt pour une journée productive ?
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={resetToDefault}>
-            <RotateCcw className="mr-2 size-4" />
-            Dashbord par défaut
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={resetToDefault} className="flex-1 sm:flex-none">
+            <RotateCcw className="mr-1 sm:mr-2 size-3 sm:size-4" />
+            <span className="text-xs sm:text-sm">Par défaut</span>
           </Button>
-          <Button variant="outline" onClick={() => setShowWidgetConfig(true)}>
-            <Settings className="mr-2 size-4" />
-            Personnaliser
+          <Button variant="outline" size="sm" onClick={() => setShowWidgetConfig(true)} className="flex-1 sm:flex-none">
+            <Settings className="mr-1 sm:mr-2 size-3 sm:size-4" />
+            <span className="text-xs sm:text-sm">Personnaliser</span>
           </Button>
         </div>
       </div>
@@ -1043,9 +1045,69 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               </Button>
             </CardContent>
           </Card>
+
+          <Card className="col-span-3 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+                onClick={() => addWidget("projects-stats")}>
+            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
+              <FolderKanban className="size-8 text-muted-foreground mb-2" />
+              <p className="text-sm font-medium text-muted-foreground">Progression projets</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Vos projets personnels</p>
+              <Button 
+                size="icon" 
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                variant="ghost"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  addWidget("tasks-stats")
+                }}
+              >
+                <Plus className="size-5" />
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="col-span-1 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+                onClick={() => addWidget("sleep-bedtime-cycles")}>
+            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
+              <BedDouble className="size-8 text-muted-foreground mb-2" />
+              <p className="text-xs font-medium text-muted-foreground">Heure de coucher</p>
+              <Button 
+                size="icon" 
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                variant="ghost"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  addWidget("routine-progress")
+                }}
+              >
+                <Plus className="size-5" />
+              </Button>
+            </CardContent>
+          </Card>
+          
+          <Card className="col-span-4 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+                onClick={() => addWidget("workout-summary")}>
+            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
+              <Dumbbell className="size-8 text-muted-foreground mb-2" />
+              <p className="text-sm font-medium text-muted-foreground">Sport</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Vos entraînements et calories de la semaine</p>
+              <Button 
+                size="icon" 
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                variant="ghost"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  addWidget("tasks-stats")
+                }}
+              >
+                <Plus className="size-5" />
+              </Button>
+            </CardContent>
+          </Card>
+
         </div>
       ) : (
-        <div className="grid gap-4 grid-cols-4 auto-rows-[200px]" style={{ gridAutoFlow: 'dense' }}>
+        <div className="grid gap-2 sm:gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 auto-rows-[150px] sm:auto-rows-[200px]" style={{ gridAutoFlow: 'dense' }}>
           {enabledWidgets.map((widget) => (
           <div
             key={widget.id}
@@ -1054,9 +1116,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             className={cn(
               "relative transition-all group",
               widget.width === 1 && "col-span-1",
-              widget.width === 2 && "col-span-2",
-              widget.width === 3 && "col-span-3",
-              widget.width === 4 && "col-span-4",
+              widget.width === 2 && "col-span-2 sm:col-span-2",
+              widget.width === 3 && "col-span-2 sm:col-span-3",
+              widget.width === 4 && "col-span-2 sm:col-span-3 md:col-span-4",
               widget.height === 1 && "row-span-1",
               widget.height === 2 && "row-span-2",
               draggedWidget === widget.id && "opacity-50",
@@ -1064,7 +1126,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             )}
           >
             {/* Widget Controls */}
-            <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute top-1 right-1 sm:top-2 sm:right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               {/* Drag Handle */}
               <div
                 draggable={!resizingWidget}
@@ -1214,7 +1276,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
 
       {/* Widget Configuration Dialog */}
       <Dialog open={showWidgetConfig} onOpenChange={setShowWidgetConfig}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[90vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Personnaliser le tableau de bord</DialogTitle>
             <DialogDescription>

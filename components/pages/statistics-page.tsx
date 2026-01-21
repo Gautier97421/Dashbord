@@ -215,29 +215,29 @@ export function StatisticsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Statistiques</h1>
-        <p className="text-muted-foreground">Analysez vos performances et identifiez vos points forts</p>
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Statistiques</h1>
+        <p className="text-sm text-muted-foreground">Analysez vos performances et identifiez vos points forts</p>
       </div>
 
       {/* Overview Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:gap-4 grid-cols-2 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Taux routine (30j)</p>
-                <p className="text-2xl font-bold">{routineStats.overallRate}%</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Taux routine (30j)</p>
+                <p className="text-xl sm:text-2xl font-bold">{routineStats.overallRate}%</p>
               </div>
               <div className={cn(
-                "flex items-center gap-1 text-sm",
+                "flex items-center gap-0.5 sm:gap-1 text-xs sm:text-sm",
                 routineStats.monthChange >= 0 ? "text-success" : "text-destructive"
               )}>
                 {routineStats.monthChange >= 0 ? (
-                  <TrendingUp className="size-4" />
+                  <TrendingUp className="size-3 sm:size-4" />
                 ) : (
-                  <TrendingDown className="size-4" />
+                  <TrendingDown className="size-3 sm:size-4" />
                 )}
                 {Math.abs(routineStats.monthChange)}%
               </div>
@@ -247,14 +247,14 @@ export function StatisticsPage() {
         </Card>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Missions complétées</p>
-                <p className="text-2xl font-bold">{missionStats.completed}/{missionStats.total}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Missions complétées</p>
+                <p className="text-xl sm:text-2xl font-bold">{missionStats.completed}/{missionStats.total}</p>
               </div>
-              <div className="rounded-full bg-primary/10 p-2">
-                <Target className="size-5 text-primary" />
+              <div className="rounded-full bg-primary/10 p-1.5 sm:p-2">
+                <Target className="size-4 sm:size-5 text-primary" />
               </div>
             </div>
             <Progress value={missionStats.completionRate} className="mt-2 h-1" />
@@ -262,14 +262,14 @@ export function StatisticsPage() {
         </Card>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Projets actifs</p>
-                <p className="text-2xl font-bold">{projectStats.active}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Projets actifs</p>
+                <p className="text-xl sm:text-2xl font-bold">{projectStats.active}</p>
               </div>
-              <div className="rounded-full bg-accent/10 p-2">
-                <CheckCircle2 className="size-5 text-accent" />
+              <div className="rounded-full bg-accent/10 p-1.5 sm:p-2">
+                <CheckCircle2 className="size-4 sm:size-5 text-accent" />
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
@@ -279,16 +279,16 @@ export function StatisticsPage() {
         </Card>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Meilleure série</p>
-                <p className="text-2xl font-bold">
+                <p className="text-xs sm:text-sm text-muted-foreground">Meilleure série</p>
+                <p className="text-xl sm:text-2xl font-bold">
                   {routineInsights.bestStreak?.streak.current || 0}j
                 </p>
               </div>
-              <div className="rounded-full bg-orange-500/10 p-2">
-                <Flame className="size-5 text-orange-500" />
+              <div className="rounded-full bg-orange-500/10 p-1.5 sm:p-2">
+                <Flame className="size-4 sm:size-5 text-orange-500" />
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-2 truncate">
@@ -298,7 +298,7 @@ export function StatisticsPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-2">
         {/* Routine Completion Chart */}
         <Card>
           <CardHeader>
@@ -309,7 +309,7 @@ export function StatisticsPage() {
             <CardDescription>Taux de complétion quotidien</CardDescription>
           </CardHeader>
           <CardContent>
-            <ChartContainer config={chartConfig} className="h-[250px] w-full">
+            <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] w-full">
               <AreaChart
                 data={routineStats.dailyCompletion.slice(-14)}
                 margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
@@ -354,7 +354,7 @@ export function StatisticsPage() {
             <CardDescription>Vos jours les plus productifs</CardDescription>
           </CardHeader>
           <CardContent>
-            <ChartContainer config={chartConfig} className="h-[250px] w-full">
+            <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] w-full">
               <BarChart data={weekdayStats} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <XAxis
                   dataKey="day"
@@ -382,7 +382,7 @@ export function StatisticsPage() {
             <CardDescription>Par statut et période</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* By Status */}
               <div className="space-y-3">
                 <p className="text-sm font-medium">Par statut</p>

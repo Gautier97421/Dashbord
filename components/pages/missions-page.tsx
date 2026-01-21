@@ -329,11 +329,11 @@ export function MissionsPage() {
   )
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Missions</h1>
-          <p className="text-muted-foreground">Organisez vos objectifs par période</p>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Missions</h1>
+          <p className="text-sm text-muted-foreground">Organisez vos objectifs par période</p>
         </div>
 
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -342,12 +342,12 @@ export function MissionsPage() {
           setIsDialogOpen(open)
         }}>
           <DialogTrigger asChild>
-            <Button>
+            <Button size="sm" className="sm:size-default w-full sm:w-auto">
               <Plus className="size-4 mr-2" />
               Nouvelle mission
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-[90vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingMission ? "Modifier la mission" : "Nouvelle mission"}</DialogTitle>
               <DialogDescription>
@@ -500,10 +500,10 @@ export function MissionsPage() {
 
         {TIME_FRAMES.map((tf) => (
           <TabsContent key={tf.value} value={tf.value} className="mt-6">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {/* To Do Column */}
               <div className="space-y-4">
-                <h3 className="font-semibold flex items-center gap-2">
+                <h3 className="font-semibold flex items-center gap-2 text-sm sm:text-base">
                   <Circle className="size-4 text-muted-foreground" />
                   À faire
                   <Badge variant="secondary">
@@ -517,7 +517,7 @@ export function MissionsPage() {
 
               {/* In Progress Column */}
               <div className="space-y-4">
-                <h3 className="font-semibold flex items-center gap-2">
+                <h3 className="font-semibold flex items-center gap-2 text-sm sm:text-base">
                   <Clock className="size-4 text-primary" />
                   En cours
                   <Badge variant="secondary">
@@ -531,7 +531,7 @@ export function MissionsPage() {
 
               {/* Done Column */}
               <div className="space-y-4">
-                <h3 className="font-semibold flex items-center gap-2">
+                <h3 className="font-semibold flex items-center gap-2 text-sm sm:text-base">
                   <CheckCircle2 className="size-4 text-success" />
                   Terminé
                   <Badge variant="secondary">

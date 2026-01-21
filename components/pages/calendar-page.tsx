@@ -158,11 +158,11 @@ export function CalendarPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Calendrier</h1>
-          <p className="text-muted-foreground">Planifiez vos événements et tâches</p>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Calendrier</h1>
+          <p className="text-sm text-muted-foreground">Planifiez vos événements et tâches</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -173,9 +173,9 @@ export function CalendarPage() {
                 variant={viewMode === mode ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setViewMode(mode)}
-                className="rounded-none first:rounded-l-lg last:rounded-r-lg"
+                className="rounded-none first:rounded-l-lg last:rounded-r-lg text-xs sm:text-sm px-2 sm:px-3"
               >
-                {mode === "day" ? "Jour" : mode === "week" ? "Semaine" : "Mois"}
+                {mode === "day" ? "Jour" : mode === "week" ? "Sem." : "Mois"}
               </Button>
             ))}
           </div>
@@ -200,11 +200,11 @@ export function CalendarPage() {
         <Card>
           <CardContent className="p-4">
             {/* Day headers */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
+            <div className="grid grid-cols-7 gap-0.5 sm:gap-1 mb-2">
               {DAYS.map((day) => (
                 <div
                   key={day}
-                  className="text-center text-sm font-medium text-muted-foreground py-2"
+                  className="text-center text-xs sm:text-sm font-medium text-muted-foreground py-1 sm:py-2"
                 >
                   {day}
                 </div>
@@ -212,7 +212,7 @@ export function CalendarPage() {
             </div>
 
             {/* Calendar grid */}
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
               {calendarDays.map(({ date, isCurrentMonth }, index) => {
                 const dateStr = date.toISOString().split("T")[0]
                 const events = getEventsForDate(date)
@@ -230,7 +230,7 @@ export function CalendarPage() {
                       <button
                         onClick={() => setSelectedDate(dateStr)}
                         className={cn(
-                          "min-h-24 p-1 text-left rounded-lg border transition-colors hover:bg-muted/50",
+                          "min-h-16 sm:min-h-24 p-0.5 sm:p-1 text-left rounded-lg border transition-colors hover:bg-muted/50",
                           !isCurrentMonth && "opacity-40",
                           isToday && "border-primary bg-primary/5",
                           isSelected && "ring-2 ring-primary"
@@ -238,13 +238,13 @@ export function CalendarPage() {
                       >
                         <span
                           className={cn(
-                            "inline-flex size-6 items-center justify-center rounded-full text-sm",
+                            "inline-flex size-5 sm:size-6 items-center justify-center rounded-full text-xs sm:text-sm",
                             isToday && "bg-primary text-primary-foreground font-medium"
                           )}
                         >
                           {date.getDate()}
                         </span>
-                        <div className="mt-1 space-y-0.5">
+                        <div className="mt-0.5 sm:mt-1 space-y-0.5 hidden sm:block">
                           {events.slice(0, 2).map((event) => (
                             <div
                               key={event.id}
@@ -263,6 +263,22 @@ export function CalendarPage() {
                               +{events.length - 2} autres
                             </div>
                           )}
+                        </div>
+                        {/* Mobile event indicator */}
+                        <div className="flex gap-0.5 sm:hidden mt-0.5">
+                          {events.slice(0, 3).map((event) => (
+                            <div
+                              key={event.id}
+                              className={cn(
+                                "size-1.5 rounded-full",
+                                event.completed
+                                  ? "bg-muted-foreground"
+                                  : event.priority === "high" ? "bg-destructive" 
+                                  : event.priority === "medium" ? "bg-primary"
+                                  : "bg-muted-foreground"
+                              )}
+                            />
+                          ))}
                         </div>
                       </button>
                     </DialogTrigger>

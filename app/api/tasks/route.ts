@@ -71,8 +71,24 @@ export async function POST(request: Request) {
 // PUT update a task
 export async function PUT(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const body = await request.json()
     const { id, title, description, priority, status, dueDate, missionId, projectId, completedAt } = body
+
+    // Verify task belongs to user
+    const existingTask = await prisma.task.findFirst({ where: { id, userId: user.id } })
+    if (!existingTask) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+    }
 
     const task = await prisma.task.update({
       where: { id },
@@ -98,11 +114,27 @@ export async function PUT(request: Request) {
 // DELETE a task
 export async function DELETE(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const body = await request.json()
     const { id } = body
 
     if (!id) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 })
+    }
+
+    // Verify task belongs to user
+    const existingTask = await prisma.task.findFirst({ where: { id, userId: user.id } })
+    if (!existingTask) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 })
     }
 
     await prisma.task.delete({

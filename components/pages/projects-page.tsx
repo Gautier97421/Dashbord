@@ -316,10 +316,10 @@ export function ProjectsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Projets</h1>
-          <p className="text-muted-foreground">Gérez vos projets et suivez leur avancement</p>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Projets</h1>
+          <p className="text-sm text-muted-foreground">Gérez vos projets et leurs tâches</p>
         </div>
 
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -327,12 +327,12 @@ export function ProjectsPage() {
           setIsDialogOpen(open)
         }}>
           <DialogTrigger asChild>
-            <Button>
+            <Button size="sm" className="sm:size-default w-full sm:w-auto">
               <Plus className="size-4 mr-2" />
               Nouveau projet
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-[90vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingProject ? "Modifier le projet" : "Nouveau projet"}</DialogTitle>
               <DialogDescription>
@@ -464,7 +464,7 @@ export function ProjectsPage() {
         </Dialog>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-3">
         {/* Projects List */}
         <div className="lg:col-span-1 space-y-4">
           <div className="flex items-center justify-between">

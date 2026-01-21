@@ -79,11 +79,27 @@ export async function POST(request: Request) {
 // DELETE a sleep log
 export async function DELETE(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
 
     if (!id) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 })
+    }
+
+    // Verify sleep log belongs to user
+    const existingLog = await prisma.sleepLog.findFirst({ where: { id, userId: user.id } })
+    if (!existingLog) {
+      return NextResponse.json({ error: 'Sleep log not found' }, { status: 404 })
     }
 
     await prisma.sleepLog.delete({

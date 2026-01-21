@@ -172,25 +172,26 @@ export function SleepPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Sommeil</h1>
-        <p className="text-muted-foreground">Trackez votre sommeil et optimisez vos cycles</p>
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Sommeil</h1>
+        <p className="text-sm text-muted-foreground">Trackez votre sommeil et optimisez vos cycles</p>
       </div>
 
-      <Tabs defaultValue="calculator" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="calculator">
-            <Clock className="mr-2 h-4 w-4" />
-            Calculateur de cycles
+      <Tabs defaultValue="calculator" className="space-y-4 sm:space-y-6">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="calculator" className="text-xs sm:text-sm">
+            <Clock className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Calculateur</span>
+            <span className="sm:hidden">Cycles</span>
           </TabsTrigger>
-          <TabsTrigger value="tracking">
-            <Moon className="mr-2 h-4 w-4" />
-            Suivi du sommeil
+          <TabsTrigger value="tracking" className="text-xs sm:text-sm">
+            <Moon className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+            Suivi
           </TabsTrigger>
-          <TabsTrigger value="stats">
-            <TrendingUp className="mr-2 h-4 w-4" />
-            Statistiques
+          <TabsTrigger value="stats" className="text-xs sm:text-sm">
+            <TrendingUp className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+            Stats
           </TabsTrigger>
         </TabsList>
 
@@ -204,20 +205,20 @@ export function SleepPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                 {sleepCycles.map((cycle) => (
                   <div
                     key={cycle.cycles}
-                    className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent transition-colors"
+                    className="flex items-center justify-between p-3 sm:p-4 rounded-lg border bg-card hover:bg-accent transition-colors"
                   >
                     <div>
-                      <p className="font-semibold">{cycle.cycles} cycles</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="font-semibold text-sm sm:text-base">{cycle.cycles} cycles</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">
                         {Math.floor(cycle.duration / 60)}h{cycle.duration % 60 > 0 ? ` ${cycle.duration % 60}min` : ""}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-2xl font-bold">{formatTime(cycle.wakeTime)}</p>
+                      <p className="text-xl sm:text-2xl font-bold">{formatTime(cycle.wakeTime)}</p>
                       <p className="text-xs text-muted-foreground">Réveil</p>
                     </div>
                   </div>
@@ -448,7 +449,7 @@ export function SleepPage() {
 
         {/* Statistiques */}
         <TabsContent value="stats" className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 grid-cols-3" >
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium">Sommeil moyen</CardTitle>

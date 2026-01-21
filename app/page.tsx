@@ -91,15 +91,15 @@ function DashboardLayout() {
       <OnboardingTutorial open={showOnboarding} onComplete={handleCompleteOnboarding} />
       <AppSidebar currentPage={currentPage} onNavigate={setCurrentPage} />
       <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+        <header className="flex h-12 sm:h-14 shrink-0 items-center gap-2 border-b px-2 sm:px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
-          <h1 className="font-semibold">{getPageTitle()}</h1>
+          <h1 className="font-semibold text-sm sm:text-base truncate">{getPageTitle()}</h1>
           <div className="ml-auto">
             <ThemeToggle />
           </div>
         </header>
-        <main className="flex-1 overflow-auto p-4 md:p-6">
+        <main className="flex-1 overflow-auto p-2 sm:p-4 md:p-6">
           {renderPage()}
         </main>
       </SidebarInset>
