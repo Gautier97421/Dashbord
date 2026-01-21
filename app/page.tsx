@@ -6,6 +6,7 @@ import { AppSidebar, type NavPage } from "@/components/app-sidebar"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { OnboardingTutorial } from "@/components/onboarding-tutorial"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { DashboardPage } from "@/components/pages/dashboard-page"
 import { CalendarPage } from "@/components/pages/calendar-page"
 import { RoutinePage } from "@/components/pages/routine-page"
@@ -94,6 +95,9 @@ function DashboardLayout() {
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
           <h1 className="font-semibold">{getPageTitle()}</h1>
+          <div className="ml-auto">
+            <ThemeToggle />
+          </div>
         </header>
         <main className="flex-1 overflow-auto p-4 md:p-6">
           {renderPage()}
