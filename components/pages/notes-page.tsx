@@ -752,17 +752,16 @@ export function NotesPage() {
           </div>
 
           {/* Editor */}
-          <div className="flex-1 overflow-auto" style={{ backgroundColor: '#f8f1e3' }}>
+          <div className="flex-1 overflow-auto bg-[#f8f1e3] dark:bg-[#1a1a1a]">
             <div className="max-w-4xl mx-auto p-6 sm:p-8">
               <div
                 ref={editorRef}
                 contentEditable
                 onInput={handleEditorInput}
-                className="min-h-[calc(100vh-240px)] shadow-lg rounded p-8 focus:outline-none text-base leading-relaxed"
+                className="min-h-[calc(100vh-240px)] shadow-lg rounded p-8 focus:outline-none text-base leading-relaxed bg-[#fffef5] dark:bg-[#242424] dark:text-gray-100"
                 style={{
                   fontSize: '16px',
                   lineHeight: '1.75',
-                  backgroundColor: '#fffef5',
                 }}
                 suppressContentEditableWarning
               />
