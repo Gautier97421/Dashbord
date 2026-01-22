@@ -50,6 +50,7 @@ import {
   ArrowUpDown,
   Trash2,
   Edit3,
+  Apple,
 } from "lucide-react"
 import { useApp } from "@/lib/store-api"
 import { getToday, formatDateFr, calculateStreak, generateId } from "@/lib/helpers"
