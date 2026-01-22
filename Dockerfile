@@ -32,7 +32,7 @@ RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma gene
 
 # Build the application
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm run build:railway
+RUN pnpm build
 
 # Production image, copy all the files and run next
 FROM base AS runner
