@@ -6,7 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'SoloLeveling - Dashboard de productivité personnelle',
+  title: 'DashLife - Dashboard de productivité personnelle',
   description: 'Organisez vos journée, suivez vos habitudes et atteignez vos objectifs.',
   manifest: '/site.webmanifest',
   icons: {

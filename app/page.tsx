@@ -18,6 +18,7 @@ import { SleepPage } from "@/components/pages/sleep-page"
 import { StatisticsPage } from "@/components/pages/statistics-page"
 import { SettingsPage } from "@/components/pages/settings-page"
 import { NotesPage } from "@/components/pages/notes-page"
+import { CuisinePage } from "@/components/pages/cuisine-page"
 
 function DashboardLayout() {
   const [currentPage, setCurrentPage] = useState<NavPage>("dashboard")
@@ -66,6 +67,8 @@ function DashboardLayout() {
         return <StatisticsPage />
       case "notes":
         return <NotesPage />
+      case "cuisine":
+        return <CuisinePage />
       case "settings":
         return <SettingsPage />
       default:

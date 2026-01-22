@@ -17,6 +17,7 @@ import {
   BedDouble,
   LogOut,
   StickyNote,
+  ChefHat,
 } from "lucide-react"
 import {
   Sidebar,
@@ -31,7 +32,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar"
 
-export type NavPage = "dashboard" | "calendar" | "routine" | "routine-night" | "missions" | "projects" | "sport" | "sleep" | "statistics" | "notes" | "settings"
+export type NavPage = "dashboard" | "calendar" | "routine" | "routine-night" | "missions" | "projects" | "sport" | "sleep" | "statistics" | "notes" | "cuisine" | "settings"
 
 const navItems: { id: NavPage; label: string; icon: React.ElementType }[] = [
   { id: "dashboard", label: "Tableau de bord", icon: LayoutDashboard },
@@ -44,6 +45,7 @@ const navItems: { id: NavPage; label: string; icon: React.ElementType }[] = [
   { id: "sleep", label: "Sommeil", icon: BedDouble },
   { id: "statistics", label: "Statistiques", icon: BarChart3 },
   { id: "notes", label: "Bloc-notes", icon: StickyNote },
+  { id: "cuisine", label: "Cuisine", icon: ChefHat },
   { id: "settings", label: "Paramètres", icon: Settings },
 ]
 

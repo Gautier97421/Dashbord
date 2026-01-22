@@ -40,10 +40,12 @@ import {
   Settings,
   RotateCcw,
   Moon,
+  Sun,
   Bed,
   Dumbbell,
   ArrowLeftRight,
   FolderKanban,
+  FolderOpen,
   BedDouble,
   ArrowUpDown,
   Trash2,
@@ -60,9 +62,9 @@ interface DashboardPageProps {
 }
 
 const WIDGET_LABELS: Record<WidgetType, { label: string; description: string; icon: any; category?: string }> = {
-  "routine-progress": { label: "Routine du jour", description: "Progression de la routine matinale", icon: CheckCircle2, category: "Routine" },
+  "routine-progress": { label: "Routine matinale", description: "Progression de la routine matinale", icon: Sun, category: "Routine" },
   "routine-streak": { label: "Série routine", description: "Nombre de jours consécutifs", icon: Flame, category: "Routine" },
-  "routine-list": { label: "Liste routine", description: "Actions de la routine matinale", icon: CheckCircle2, category: "Routine" },
+  "routine-list": { label: "Liste routine matinale", description: "Actions de la routine matinale", icon: Sun, category: "Routine" },
   
   "night-routine-progress": { label: "Routine du soir", description: "Progression routine du soir", icon: Moon, category: "Routine" },
   "night-routine-list": { label: "Liste routine soir", description: "Actions de la routine du soir", icon: Moon, category: "Routine" },
@@ -76,9 +78,9 @@ const WIDGET_LABELS: Record<WidgetType, { label: string; description: string; ic
   "tasks-today": { label: "Tâches du jour", description: "Tâches à faire aujourd'hui", icon: CheckCircle2, category: "Tâches" },
   "tasks-urgent": { label: "Tâches urgentes", description: "Tâches avec deadline proche", icon: Clock, category: "Tâches" },
   
-  "projects-stats": { label: "Projets actifs", description: "Nombre de projets en cours", icon: TrendingUp, category: "Projets" },
-  "active-projects": { label: "Projets en cours", description: "Liste des projets actifs", icon: TrendingUp, category: "Projets" },
-  "project-progress": { label: "Progression projet", description: "Progression détaillée des projets", icon: TrendingUp, category: "Projets" },
+  "projects-stats": { label: "Projets actifs", description: "Nombre de projets en cours", icon: FolderOpen, category: "Projets" },
+  "active-projects": { label: "Projets en cours", description: "Liste des projets actifs", icon: FolderOpen, category: "Projets" },
+  "project-progress": { label: "Progression projet", description: "Progression détaillée des projets", icon: FolderOpen, category: "Projets" },
   
   "sleep-summary": { label: "Sommeil", description: "Résumé du sommeil", icon: Bed, category: "Sommeil" },
   "sleep-bedtime-cycles": { label: "Heure de coucher", description: "Heure pour 6 cycles de sommeil", icon: Bed, category: "Sommeil" },
@@ -91,8 +93,8 @@ const WIDGET_LABELS: Record<WidgetType, { label: string; description: string; ic
   "workout-last-session": { label: "Dernier entraînement", description: "Détails de la dernière séance", icon: Dumbbell, category: "Sport" },
   "workout-calories": { label: "Calories brûlées", description: "Calories de la semaine", icon: Dumbbell, category: "Sport" },
   
-  "nutrition-daily": { label: "Nutrition du jour", description: "Apports nutritionnels aujourd'hui", icon: Target, category: "Nutrition" },
-  "nutrition-macros": { label: "Macros", description: "Répartition protéines/glucides/lipides", icon: Target, category: "Nutrition" },
+  "nutrition-daily": { label: "Nutrition du jour", description: "Apports nutritionnels aujourd'hui", icon: Apple, category: "Nutrition" },
+  "nutrition-macros": { label: "Macros", description: "Répartition protéines/glucides/lipides", icon: Apple, category: "Nutrition" },
 }
 
 const DEFAULT_DASHBOARD_WIDGETS: DashboardWidget[] = [

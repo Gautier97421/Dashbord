@@ -1,4 +1,4 @@
-# 🎯 Dashboard SoloLeveling - Guide Complet
+# 🎯 Dashboard DashLife - Guide Complet
 
 ## 📋 Résumé des modifications
 

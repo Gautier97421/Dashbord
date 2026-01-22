@@ -72,7 +72,7 @@ export default function RegisterPage() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">Inscription</CardTitle>
           <CardDescription className="text-center">
-            Créez un compte pour commencer à utiliser SoloLeveling
+            Créez un compte pour commencer à utiliser DashLife
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>

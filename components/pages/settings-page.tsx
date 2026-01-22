@@ -145,7 +145,7 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
-            <strong>SoloLeveling</strong> - Votre assistant de productivité personnelle
+            <strong>DashLife</strong> - Votre assistant de productivité personnelle
           </p>
           <p>
             Conçu pour vous aider à construire de meilleures habitudes, gérer vos projets
