@@ -9,6 +9,12 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useIsMobile } from "@/hooks/use-mobile"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger} from "@/components/ui/dropdown-menu"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -1015,7 +1021,7 @@ export function SportPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="absolute bottom-1 right-1 h-6 w-6 opacity-0 group-hover/day:opacity-100 transition-opacity bg-green-700 hover:bg-green-800 text-green-900 shadow-md"
+                          className="absolute bottom-1 right-1 h-6 w-6 opacity-0 group-hover/day:opacity-100 transition-opacity"
                           onClick={(e) => {
                             e.stopPropagation()
                             setNewWorkout({
@@ -1026,7 +1032,7 @@ export function SportPage() {
                             setShowWorkoutForm(true)
                           }}
                         >
-                          <Plus className="h-4 w-4" />
+                          <Plus className="size-5" />
                         </Button>
                       </div>
                     )
@@ -1149,7 +1155,7 @@ export function SportPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>Programmes d'entraînement</CardTitle>
-                  <CardDescription>Créez des programmes récurrents et générez automatiquement vos séances</CardDescription>
+                  <CardDescription className="text-xs sm:text-sm">Créez des programmes récurrents et générez automatiquement vos séances</CardDescription>
                 </div>
                 <Button onClick={() => setShowProgramForm(true)}>
                   <Plus className="mr-2 h-4 w-4" />
@@ -1171,58 +1177,110 @@ export function SportPage() {
                       <CardHeader>
                         <div className="flex items-center justify-between">
                           <div>
-                            <CardTitle className="text-lg">{program.name}</CardTitle>
+                            <CardTitle className="text-sm sm:text-lg">{program.name}</CardTitle>
                             {program.description && (
                               <CardDescription>{program.description}</CardDescription>
                             )}
                           </div>
-                          <div className="flex gap-2">
-                            <Button
-                              variant={program.active ? "default" : "outline"}
-                              size="sm"
-                              onClick={async () => {
-                                await updateWorkoutProgram({
-                                  ...program,
-                                  active: !program.active,
-                                })
-                              }}
-                            >
-                              {program.active ? "Actif" : "Inactif"}
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedProgramId(program.id)
-                                setShowApplyDialog(true)
-                              }}
-                            >
-                              Appliquer
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                if (confirm("Supprimer ce programme ? Toutes les séances générées seront également supprimées.")) {
-                                  // Supprimer toutes les séances liées au programme
-                                  const linkedWorkouts = state.workoutSessions.filter((w) => w.programId === program.id)
-                                  linkedWorkouts.forEach((workout) => {
-                                    // Supprimer la mission associée si elle existe
-                                    if (workout.missionId) {
-                                      dispatch({ type: "DELETE_MISSION", payload: workout.missionId })
-                                    }
-                                    // Supprimer le workout
-                                    dispatch({ type: "DELETE_WORKOUT", payload: workout.id })
+                          <div className="flex items-center gap-2">
+                            {/* DESKTOP */}
+                            <div className="hidden sm:flex gap-2">
+                              <Button
+                                variant={program.active ? "default" : "outline"}
+                                size="sm"
+                                onClick={async () => {
+                                  await updateWorkoutProgram({
+                                    ...program,
+                                    active: !program.active,
                                   })
-                                  
-                                  // Supprimer le programme
-                                  dispatch({ type: "DELETE_WORKOUT_PROGRAM", payload: program.id })
-                                }
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                                }}
+                              >
+                                {program.active ? "Actif" : "Inactif"}
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedProgramId(program.id)
+                                  setShowApplyDialog(true)
+                                }}
+                              >
+                                Appliquer
+                              </Button>
+
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  if (confirm("Supprimer ce programme ? Toutes les séances générées seront également supprimées.")) {
+                                    const linkedWorkouts = state.workoutSessions.filter((w) => w.programId === program.id)
+                                    linkedWorkouts.forEach((workout) => {
+                                      if (workout.missionId) {
+                                        dispatch({ type: "DELETE_MISSION", payload: workout.missionId })
+                                      }
+                                      dispatch({ type: "DELETE_WORKOUT", payload: workout.id })
+                                    })
+                                    dispatch({ type: "DELETE_WORKOUT_PROGRAM", payload: program.id })
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+
+                            {/* MOBILE */}
+                            <div className="sm:hidden">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    ⋮
+                                  </Button>
+                                </DropdownMenuTrigger>
+
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={async () => {
+                                      await updateWorkoutProgram({
+                                        ...program,
+                                        active: !program.active,
+                                      })
+                                    }}
+                                  >
+                                    {program.active ? "Désactiver" : "Activer"}
+                                  </DropdownMenuItem>
+
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSelectedProgramId(program.id)
+                                      setShowApplyDialog(true)
+                                    }}
+                                  >
+                                    Appliquer
+                                  </DropdownMenuItem>
+
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={() => {
+                                      if (confirm("Supprimer ce programme ? Toutes les séances générées seront également supprimées.")) {
+                                        const linkedWorkouts = state.workoutSessions.filter((w) => w.programId === program.id)
+                                        linkedWorkouts.forEach((workout) => {
+                                          if (workout.missionId) {
+                                            dispatch({ type: "DELETE_MISSION", payload: workout.missionId })
+                                          }
+                                          dispatch({ type: "DELETE_WORKOUT", payload: workout.id })
+                                        })
+                                        dispatch({ type: "DELETE_WORKOUT_PROGRAM", payload: program.id })
+                                      }
+                                    }}
+                                  >
+                                    Supprimer
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
                           </div>
+
                         </div>
                       </CardHeader>
                       <CardContent>
@@ -1241,14 +1299,14 @@ export function SportPage() {
                               return (
                                 <div
                                   key={index}
-                                  className={`p-2 rounded text-center text-xs ${
+                                  className={`p-1 sm:p-2 rounded text-center text-xs ${
                                     session
                                       ? "bg-primary text-primary-foreground"
                                       : "bg-muted text-muted-foreground"
                                   }`}
                                 >
                                   <div className="font-semibold">{day}</div>
-                                  {session && (
+                                  {session && !isMobile &&(
                                     <>
                                       {session.time && <div className="text-xs opacity-80">{session.time}</div>}
                                       <div className="mt-1 truncate">
@@ -1283,29 +1341,29 @@ export function SportPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-4 gap-4">
-                  <div className="text-center p-4 rounded-lg border">
-                    <p className="text-base sm:text-2xl font-bold">{recommendedMacros.calories}kcal</p>
+                  <div className="text-center py-4 px-1 rounded-lg border">
+                    <p className="text-sm sm:text-2xl font-bold">{recommendedMacros.calories}kcal</p>
                     <p className="text-xs sm:text-sm text-muted-foreground">Calories</p>
                     {todayNutrition && (
                       <p className="text-xs mt-1">{todayNutrition.calories}/{recommendedMacros.calories}</p>
                     )}
                   </div>
-                  <div className="text-center p-4 rounded-lg border">
-                    <p className="text-base sm:text-2xl font-bold">{recommendedMacros.protein}g</p>
+                  <div className="text-center py-4 px-1 rounded-lg border">
+                    <p className="text-sm sm:text-2xl font-bold">{recommendedMacros.protein}g</p>
                     <p className="text-xs sm:text-sm text-muted-foreground">Protéines</p>
                     {todayNutrition && (
                       <p className="text-xs mt-1">{todayNutrition.protein}g/{recommendedMacros.protein}g</p>
                     )}
                   </div>
-                  <div className="text-center p-4 rounded-lg border">
-                    <p className="text-base sm:text-2xl font-bold">{recommendedMacros.carbs}g</p>
+                  <div className="text-center py-4 px-1 rounded-lg border">
+                    <p className="text-sm sm:text-2xl font-bold">{recommendedMacros.carbs}g</p>
                     <p className="text-xs sm:text-sm text-muted-foreground">Glucides</p>
                     {todayNutrition && (
                       <p className="text-xs mt-1">{todayNutrition.carbs}g/{recommendedMacros.carbs}g</p>
                     )}
                   </div>
-                  <div className="text-center p-4 rounded-lg border">
-                    <p className="text-base sm:text-2xl font-bold">{recommendedMacros.fats}g</p>
+                  <div className="text-center py-4 px-1 rounded-lg border">
+                    <p className="text-sm sm:text-2xl font-bold">{recommendedMacros.fats}g</p>
                     <p className="text-xs sm:text-sm text-muted-foreground">Lipides</p>
                     {todayNutrition && (
                       <p className="text-xs mt-1">{todayNutrition.fats}g/{recommendedMacros.fats}g</p>

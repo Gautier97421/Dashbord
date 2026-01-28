@@ -5,6 +5,7 @@ import { useApp } from "@/lib/store-api"
 import { generateId, getToday } from "@/lib/helpers"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -26,6 +27,7 @@ export function SleepPage() {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [customWakeTimes, setCustomWakeTimes] = useState(["06:00", "07:00", "08:00"])
   const [selectedDate, setSelectedDate] = useState(getToday())
+  const isMobile = useIsMobile()
 
   // Calculer les cycles de sommeil à partir de maintenant
   const calculateSleepCycles = () => {
@@ -205,7 +207,7 @@ export function SleepPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 {sleepCycles.map((cycle) => (
                   <div
                     key={cycle.cycles}
@@ -214,7 +216,7 @@ export function SleepPage() {
                     <div>
                       <p className="font-semibold text-sm sm:text-base">{cycle.cycles} cycles</p>
                       <p className="text-xs sm:text-sm text-muted-foreground">
-                        {Math.floor(cycle.duration / 60)}h{cycle.duration % 60 > 0 ? ` ${cycle.duration % 60}min` : ""}
+                        = {Math.floor(cycle.duration / 60)}h{cycle.duration % 60 > 0 ? ` ${cycle.duration % 60}min` : ""}
                       </p>
                     </div>
                     <div className="text-right">
@@ -339,22 +341,24 @@ export function SleepPage() {
                         </div>
                         {log && (
                           <div className="space-y-1">
-                            <div className="text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 px-1 py-0.5 rounded">
+                            <div className="text-[0.625rem] sm:text-xs text-center bg-blue-500/10 text-blue-600 dark:text-blue-400 px-0 py0.5 rounded">
                               {log.bedTime} → {log.wakeTime}
                             </div>
                             <div className="text-xs font-semibold">
                               {Math.floor(log.duration / 60)}h{log.duration % 60 > 0 ? `${log.duration % 60}` : ""}
                             </div>
-                            <div className="flex gap-0.5">
-                              {Array.from({ length: 5 }).map((_, i) => (
-                                <span
-                                  key={i}
-                                  className={`text-xs ${i < log.quality ? "text-yellow-500" : "text-gray-300"}`}
-                                >
-                                  ★
-                                </span>
-                              ))}
-                            </div>
+                            {!isMobile && (
+                              <div className="flex gap-0.5">
+                                {Array.from({ length: 5 }).map((_, i) => (
+                                  <span
+                                    key={i}
+                                    className={`text-xs ${i < log.quality ? "text-yellow-500" : "text-gray-300"}`}
+                                  >
+                                    ★
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -365,7 +369,7 @@ export function SleepPage() {
 
               {/* Dialog pour ajout/édition */}
               <Dialog open={showAddForm} onOpenChange={setShowAddForm}>
-                <DialogContent>
+                <DialogContent className="max-w-[90vw] sm:max-w-2xl max-h-[90vh] overflow-y-hidden">
                   <DialogHeader>
                     <DialogTitle>Enregistrer le sommeil</DialogTitle>
                     <DialogDescription>
@@ -374,19 +378,21 @@ export function SleepPage() {
                   </DialogHeader>
                   
                   <div className="space-y-4 py-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col items-start">
                         <Label>Heure de coucher</Label>
                         <Input
                           type="time"
+                          className="w-[120px] sm:w-full"
                           value={newLog.bedTime}
                           onChange={(e) => setNewLog({ ...newLog, bedTime: e.target.value })}
                         />
                       </div>
-                      <div>
+                      <div className="flex flex-col items-start">
                         <Label>Heure de réveil</Label>
                         <Input
                           type="time"
+                          className="w-[120px] sm:w-full"
                           value={newLog.wakeTime}
                           onChange={(e) => setNewLog({ ...newLog, wakeTime: e.target.value })}
                         />
@@ -455,10 +461,10 @@ export function SleepPage() {
                 <CardTitle className="text-sm font-medium">Sommeil moyen</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">
+                <div className="text-xl sm:text-3xl font-bold">
                   {Math.floor(avgSleepDuration / 60)}h{avgSleepDuration % 60 > 0 ? ` ${avgSleepDuration % 60}min` : ""}
                 </div>
-                <p className="text-xs text-muted-foreground">7 derniers jours</p>
+                <p className="text-[0.625rem] sm:text-xs text-muted-foreground">7 derniers jours</p>
               </CardContent>
             </Card>
 
@@ -467,8 +473,8 @@ export function SleepPage() {
                 <CardTitle className="text-sm font-medium">Qualité moyenne</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{avgQuality}/5</div>
-                <div className="flex gap-1 mt-2">
+                <div className="text-xl sm:text-3xl font-bold">{avgQuality}/5</div>
+                <div className="flex gap-1 mt-2 justify-center sm:justify-start">
                   {Array.from({ length: 5 }).map((_, i) => (
                     <span key={i} className={i < Math.round(Number(avgQuality)) ? "text-yellow-500" : "text-gray-300"}>
                       ★
@@ -483,10 +489,10 @@ export function SleepPage() {
                 <CardTitle className="text-sm font-medium">Dette de sommeil</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">
+                <div className="text-xl sm:text-3xl font-bold">
                   {Math.floor(sleepDebt / 60)}h{sleepDebt % 60 > 0 ? ` ${sleepDebt % 60}min` : ""}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[0.625rem] sm:text-xs text-muted-foreground">
                   {sleepDebt === 0 ? "Excellent !" : "À récupérer"}
                 </p>
               </CardContent>
