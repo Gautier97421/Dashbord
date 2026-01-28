@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
 import { Checkbox } from "@/components/ui/checkbox"
+import { useIsMobile } from "@/hooks/use-mobile"
 import {
   Dialog,
   DialogContent,
@@ -52,6 +53,7 @@ export function ProjectsPage() {
     objectives: [],
     tasks: [],
   })
+  const isMobile = useIsMobile();
   const [newObjective, setNewObjective] = useState("")
   const [newTask, setNewTask] = useState("")
   const [showCompleted, setShowCompleted] = useState(false)
@@ -494,7 +496,7 @@ export function ProjectsPage() {
           )}
 
           {/* Completed Projects */}
-          {completedProjects.length > 0 && (
+          {completedProjects.length > 0 && !isMobile &&(
             <>
               <Button
                 variant="ghost"
@@ -656,6 +658,26 @@ export function ProjectsPage() {
             </Card>
           )}
         </div>
+
+          {/* Completed Projects Mobile*/}
+          {completedProjects.length > 0 && isMobile &&(
+            <>
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                onClick={() => setShowCompleted(!showCompleted)}
+              >
+                <Archive className="size-4 mr-2" />
+                Projets archivés ({completedProjects.length})
+              </Button>
+
+              {showCompleted && (
+                <div className="space-y-3">
+                  {completedProjects.map(renderProjectCard)}
+                </div>
+              )}
+            </>
+          )}
       </div>
     </div>
   )
