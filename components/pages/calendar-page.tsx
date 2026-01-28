@@ -21,6 +21,7 @@ import { useApp } from "@/lib/store-api"
 import { generateId, formatDateFr, getToday } from "@/lib/helpers"
 import type { CalendarEvent, Priority } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 type ViewMode = "day" | "week" | "month"
 
@@ -42,6 +43,8 @@ export function CalendarPage() {
     isRecurring: false,
     completed: false,
   })
+
+  const isMobile = useIsMobile();
 
   const today = getToday()
 
@@ -175,7 +178,7 @@ export function CalendarPage() {
                 onClick={() => setViewMode(mode)}
                 className="rounded-none first:rounded-l-lg last:rounded-r-lg text-xs sm:text-sm px-2 sm:px-3"
               >
-                {mode === "day" ? "Jour" : mode === "week" ? "Sem." : "Mois"}
+                {mode === "day" ? "Jour" : mode === "week" ? (isMobile ? null : "Sem.") : "Mois"}
               </Button>
             ))}
           </div>
@@ -392,7 +395,7 @@ export function CalendarPage() {
       {viewMode === "week" && (
         <Card>
           <CardContent className="p-4">
-            <div className="grid grid-cols-7 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               {weekDays.map((date) => {
                 const dateStr = date.toISOString().split("T")[0]
                 const events = getEventsForDate(date)

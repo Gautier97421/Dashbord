@@ -1130,21 +1130,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           >
             {/* Widget Controls */}
             <div className="absolute top-1 right-1 sm:top-2 sm:right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              {/* Drag Handle */}
-              <div
-                draggable={!resizingWidget}
-                onDragStart={(e) => handleDragStart(e, widget.id)}
-                onDragEnd={handleDragEnd}
-                className="rounded-lg bg-background/95 shadow-lg border p-1 cursor-move hover:bg-accent"
-                title="Déplacer"
-              >
-                <GripVertical className="size-4" />
-              </div>
-              <div className="rounded-lg bg-background/95 shadow-lg border p-1 flex gap-1">
+              <div className="rounded-lg bg-background/0 hover:bg-background/40 transition-all p-1.5 flex gap-1.5">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-7"
+                  className="size-8 hover:bg-destructive/20 hover:scale-110"
                   onClick={(e) => {
                     e.stopPropagation()
                     setEditingWidget(widget.id)
@@ -1157,7 +1147,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-7 text-destructive"
+                  className="size-8 text-destructive hover:bg-destructive/20 hover:scale-110 transition-all"
                   onClick={(e) => {
                     e.stopPropagation()
                     deleteWidget(widget.id)
@@ -1170,7 +1160,13 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </div>
 
             {/* Drag Handle */}
-            <div className="absolute top-2 left-2 z-10 rounded-full bg-background/80 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div
+              draggable={!resizingWidget}
+              onDragStart={(e) => handleDragStart(e, widget.id)}
+              onDragEnd={handleDragEnd} 
+              className="absolute top-2 left-2 z-10 rounded-full bg-background/800 hover:bg-opacity-100 hover:bg-background/340 p-1 opacity-0 group-hover:opacity-100 transition-all cursor-grab active:cursor-grabbing"
+              title="Déplacer"
+            >
               <GripVertical className="size-4 text-muted-foreground" />
             </div>
 

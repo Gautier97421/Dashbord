@@ -261,7 +261,7 @@ export function RoutineNightPage() {
           <Progress value={routineProgress} className="h-3 mb-6" />
 
           {(!state.nightRoutineActions || state.nightRoutineActions.length === 0) ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 grid-cols-3">
               <Card className="border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
                     onClick={() => setIsDialogOpen(true)}>
                 <CardContent className="p-4 flex flex-col items-center justify-center text-center h-24">
@@ -285,7 +285,7 @@ export function RoutineNightPage() {
               </Card>
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {(state.nightRoutineActions || []).map((action) => {
               const log = todayLogs.find((l) => l.actionId === action.id)
               const isCompleted = log?.completed || false

@@ -178,16 +178,16 @@ export function SleepPage() {
         <p className="text-sm text-muted-foreground">Trackez votre sommeil et optimisez vos cycles</p>
       </div>
 
-      <Tabs defaultValue="calculator" className="space-y-4 sm:space-y-6">
+      <Tabs defaultValue="tracking" className="space-y-4 sm:space-y-6">
         <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="tracking" className="text-xs sm:text-sm">
+            <Moon className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+            Suivi
+          </TabsTrigger>
           <TabsTrigger value="calculator" className="text-xs sm:text-sm">
             <Clock className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Calculateur</span>
             <span className="sm:hidden">Cycles</span>
-          </TabsTrigger>
-          <TabsTrigger value="tracking" className="text-xs sm:text-sm">
-            <Moon className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-            Suivi
           </TabsTrigger>
           <TabsTrigger value="stats" className="text-xs sm:text-sm">
             <TrendingUp className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />

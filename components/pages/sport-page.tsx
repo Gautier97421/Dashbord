@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -18,6 +19,7 @@ import type { WorkoutSession, PersonalRecord, FitnessProfile, DailyNutrition, Me
 const DAYS_ORDER = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 const DAYS_VALUES = [1, 2, 3, 4, 5, 6, 0] // dayOfWeek correspondant (dimanche = 0 en dernier)
 const DAYS_FULL = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+
 
 export function SportPage() {
   const { state, dispatch, updateFitnessProfile, addWorkoutProgram, updateWorkoutProgram, deleteWorkoutProgram, addMission } = useApp()
@@ -37,6 +39,12 @@ export function SportPage() {
   const [nutritionMonth, setNutritionMonth] = useState(getToday().slice(0, 7)) // YYYY-MM
   const [showPresetForm, setShowPresetForm] = useState(false)
   const [editingPreset, setEditingPreset] = useState<MealPreset | null>(null)
+  
+  const isMobile = useIsMobile();
+
+  // useEffect(() => {
+  //   setIsMobile(window.innerWidth < 900); // breakpoint sm
+  // }, []);
   
   // Meal presets stockés localement (pourrait être persisté plus tard)
   const [mealPresets, setMealPresets] = useState<MealPreset[]>(() => {
@@ -820,41 +828,41 @@ export function SportPage() {
 
       {/* Stats globales */}
       <div className="grid gap-2 sm:gap-4 grid-cols-2 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-3">
+        <Card className="py-2 gap-0">
+          <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Entraînements (30j)</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-2 sm:p-4 text-center">
             <div className="text-3xl font-bold">{totalWorkouts}</div>
             <p className="text-xs text-muted-foreground">{Math.round(totalDuration / 60)}h totales</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
+        <Card className="py-2 gap-0">
+          <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Durée moyenne</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-2 sm:p-4 text-center">
             <div className="text-3xl font-bold">{avgDuration}min</div>
             <p className="text-xs text-muted-foreground">Par session</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
+        <Card className="py-2 gap-0">
+          <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Personal Records</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-2 sm:p-4 text-center">
             <div className="text-3xl font-bold">{state.personalRecords.length}</div>
             <p className="text-xs text-muted-foreground">Performances</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
+        <Card className="py-2 gap-0">
+          <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Poids actuel</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-2 sm:p-4 text-center">
             <div className="text-3xl font-bold">{state.fitnessProfile?.weight || "-"} kg</div>
             {state.fitnessProfile?.targetWeight && (
               <p className="text-xs text-muted-foreground">
@@ -949,7 +957,7 @@ export function SportPage() {
                           <div className="text-sm font-semibold">
                             {day.date.getDate()}
                           </div>
-                          {isToday && (
+                          {isToday && !isMobile && (
                             <Badge variant="default" className="text-xs px-1.5 py-0 h-5">
                               Aujourd'hui
                             </Badge>
@@ -1276,29 +1284,29 @@ export function SportPage() {
               <CardContent>
                 <div className="grid grid-cols-4 gap-4">
                   <div className="text-center p-4 rounded-lg border">
-                    <p className="text-2xl font-bold">{recommendedMacros.calories}</p>
-                    <p className="text-sm text-muted-foreground">Calories</p>
+                    <p className="text-base sm:text-2xl font-bold">{recommendedMacros.calories}kcal</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Calories</p>
                     {todayNutrition && (
                       <p className="text-xs mt-1">{todayNutrition.calories}/{recommendedMacros.calories}</p>
                     )}
                   </div>
                   <div className="text-center p-4 rounded-lg border">
-                    <p className="text-2xl font-bold">{recommendedMacros.protein}g</p>
-                    <p className="text-sm text-muted-foreground">Protéines</p>
+                    <p className="text-base sm:text-2xl font-bold">{recommendedMacros.protein}g</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Protéines</p>
                     {todayNutrition && (
                       <p className="text-xs mt-1">{todayNutrition.protein}g/{recommendedMacros.protein}g</p>
                     )}
                   </div>
                   <div className="text-center p-4 rounded-lg border">
-                    <p className="text-2xl font-bold">{recommendedMacros.carbs}g</p>
-                    <p className="text-sm text-muted-foreground">Glucides</p>
+                    <p className="text-base sm:text-2xl font-bold">{recommendedMacros.carbs}g</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Glucides</p>
                     {todayNutrition && (
                       <p className="text-xs mt-1">{todayNutrition.carbs}g/{recommendedMacros.carbs}g</p>
                     )}
                   </div>
                   <div className="text-center p-4 rounded-lg border">
-                    <p className="text-2xl font-bold">{recommendedMacros.fats}g</p>
-                    <p className="text-sm text-muted-foreground">Lipides</p>
+                    <p className="text-base sm:text-2xl font-bold">{recommendedMacros.fats}g</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Lipides</p>
                     {todayNutrition && (
                       <p className="text-xs mt-1">{todayNutrition.fats}g/{recommendedMacros.fats}g</p>
                     )}

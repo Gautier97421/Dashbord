@@ -1,9 +1,9 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-/* Police cursive pour tout le site */
+/* Police Patrick Hand - style crayon lisible */
 body {
-  font-family: cursive !important;
+  font-family: var(--font-patrick-hand), cursive, sans-serif !important;
 }
 
 * {
