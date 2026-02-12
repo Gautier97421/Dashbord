@@ -38,7 +38,10 @@ export interface DashboardWidget {
   enabled: boolean
   order: number
   width: 1 | 2 | 3 | 4
-  height: 1 | 2
+  height: 1 | 2 | 3 | 4 | 5 | 6 // Desktop: max 2, Mobile: max 6
+  // Position dans la grille (4x4 desktop, 2x6 mobile)
+  row?: number // Desktop: 0-3, Mobile: 0-5
+  col?: number // Desktop: 0-3, Mobile: 0-1
 }
 
 export interface RoutineAction {

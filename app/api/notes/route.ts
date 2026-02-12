@@ -27,7 +27,8 @@ export async function GET() {
     return NextResponse.json(notes)
   } catch (error) {
     console.error('Error fetching notes:', error)
-    return NextResponse.json({ error: 'Failed to fetch notes' }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch notes'
+    return NextResponse.json({ error: 'Failed to fetch notes', details: errorMessage }, { status: 500 })
   }
 }
 

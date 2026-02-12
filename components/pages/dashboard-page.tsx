@@ -6,6 +6,7 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,6 @@ import {
   X,
   ChevronRight,
   Flame,
-  GripVertical,
   Plus,
   Settings,
   RotateCcw,
@@ -43,14 +43,12 @@ import {
   Sun,
   Bed,
   Dumbbell,
-  ArrowLeftRight,
-  FolderKanban,
   FolderOpen,
-  BedDouble,
-  ArrowUpDown,
   Trash2,
   Edit3,
   Apple,
+  Monitor,
+  Smartphone,
 } from "lucide-react"
 import { useApp } from "@/lib/store-api"
 import { getToday, formatDateFr, calculateStreak, generateId } from "@/lib/helpers"
@@ -99,28 +97,39 @@ const WIDGET_LABELS: Record<WidgetType, { label: string; description: string; ic
 }
 
 const DEFAULT_DASHBOARD_WIDGETS: DashboardWidget[] = [
-  { id: "1", type: "routine-progress", enabled: true, order: 0, width: 1, height: 1 },
-  { id: "2", type: "missions-stats", enabled: true, order: 1, width: 1, height: 1 },
-  { id: "3", type: "tasks-stats", enabled: true, order: 2, width: 1, height: 1 },
-  { id: "4", type: "projects-stats", enabled: true, order: 3, width: 1, height: 1 },
-  { id: "5", type: "routine-list", enabled: true, order: 4, width: 2, height: 1 },
-  { id: "6", type: "today-missions", enabled: true, order: 5, width: 2, height: 1 },
-  { id: "7", type: "week-missions", enabled: true, order: 6, width: 2, height: 1 },
-  { id: "8", type: "active-projects", enabled: true, order: 7, width: 2, height: 1 },
+  { id: "1", type: "routine-progress", enabled: true, order: 0, width: 1, height: 1, row: 0, col: 0 },
+  { id: "2", type: "missions-stats", enabled: true, order: 1, width: 1, height: 1, row: 0, col: 1 },
+  { id: "3", type: "tasks-stats", enabled: true, order: 2, width: 1, height: 1, row: 0, col: 2 },
+  { id: "4", type: "projects-stats", enabled: true, order: 3, width: 1, height: 1, row: 0, col: 3 },
+  { id: "5", type: "routine-list", enabled: true, order: 4, width: 2, height: 1, row: 1, col: 0 },
+  { id: "6", type: "today-missions", enabled: true, order: 5, width: 2, height: 1, row: 1, col: 2 },
+  { id: "7", type: "week-missions", enabled: true, order: 6, width: 2, height: 1, row: 2, col: 0 },
+  { id: "8", type: "active-projects", enabled: true, order: 7, width: 2, height: 1, row: 2, col: 2 },
 ]
 
 export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const { state, dispatch, isLoading, updateDashboardWidgets, updateMission, logRoutine } = useApp()
   const today = getToday()
-  const [showWidgetConfig, setShowWidgetConfig] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
-  const [draggedWidget, setDraggedWidget] = useState<string | null>(null)
-  const [dragOverWidget, setDragOverWidget] = useState<string | null>(null)
   const [editingWidget, setEditingWidget] = useState<string | null>(null)
   const [editWidgetType, setEditWidgetType] = useState<WidgetType | null>(null)
-  const [resizingWidget, setResizingWidget] = useState<string | null>(null)
-  const [resizeStart, setResizeStart] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
-  const [resizeType, setResizeType] = useState<'width' | 'height' | 'both' | null>(null)
+  
+  // États pour l'éditeur de grille avancé
+  const [gridEditorOpen, setGridEditorOpen] = useState(false)
+  const [gridSelectionStart, setGridSelectionStart] = useState<{ row: number; col: number } | null>(null)
+  const [gridSelectionEnd, setGridSelectionEnd] = useState<{ row: number; col: number } | null>(null)
+  const [isSelecting, setIsSelecting] = useState(false)
+  const [selectedWidgetType, setSelectedWidgetType] = useState<WidgetType | null>(null)
+  const [editorWidgets, setEditorWidgets] = useState<DashboardWidget[]>([])
+  const [editorMobileWidgets, setEditorMobileWidgets] = useState<DashboardWidget[]>([])
+  const [draggedAvailableWidget, setDraggedAvailableWidget] = useState<WidgetType | null>(null)
+  const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null)
+  const [draggingEditorWidget, setDraggingEditorWidget] = useState<string | null>(null)
+  const [showMobileWidgetPanel, setShowMobileWidgetPanel] = useState(false)
+  const [separateMobileLayout, setSeparateMobileLayout] = useState(false)
+  const [editingMobileLayout, setEditingMobileLayout] = useState(false)
+  const [resizingWidget, setResizingWidget] = useState<{ id: string; edge: "right" | "bottom" | "corner" | "left" | "top" } | null>(null)
+  const [resizeStartPos, setResizeStartPos] = useState<{ x: number; y: number } | null>(null)
 
   // Initialize widgets from store - only set defaults on first load if dashboardWidgets is undefined
   const [widgets, setWidgets] = useState<DashboardWidget[]>(() => {
@@ -263,59 +272,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     return Math.round((completed / projectTasks.length) * 100)
   }
 
-  const handleDragStart = (e: React.DragEvent, widgetId: string) => {
-    setDraggedWidget(widgetId)
-    e.dataTransfer.effectAllowed = "move"
-  }
-
-  const handleDragOver = (e: React.DragEvent, widgetId: string) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = "move"
-    setDragOverWidget(widgetId)
-  }
-
-  const handleDragEnd = () => {
-    setDraggedWidget(null)
-    setDragOverWidget(null)
-  }
-
-  const handleDrop = async (e: React.DragEvent, targetWidgetId: string) => {
-    e.preventDefault()
-
-    if (!draggedWidget || draggedWidget === targetWidgetId) {
-      setDraggedWidget(null)
-      setDragOverWidget(null)
-      return
-    }
-
-    const draggedIndex = widgets.findIndex((w) => w.id === draggedWidget)
-    const targetIndex = widgets.findIndex((w) => w.id === targetWidgetId)
-
-    if (draggedIndex === -1 || targetIndex === -1) return
-
-    const newWidgets = [...widgets]
-    const [removed] = newWidgets.splice(draggedIndex, 1)
-    newWidgets.splice(targetIndex, 0, removed)
-
-    // Update order
-    const updatedWidgets = newWidgets.map((w, idx) => ({ ...w, order: idx }))
-    setWidgets(updatedWidgets)
-    dispatch({ type: "UPDATE_DASHBOARD_WIDGETS", payload: updatedWidgets })
-    await updateDashboardWidgets(updatedWidgets)
-
-    setDraggedWidget(null)
-    setDragOverWidget(null)
-  }
-
-  const toggleWidget = async (widgetId: string) => {
-    const updatedWidgets = widgets.map((w) =>
-      w.id === widgetId ? { ...w, enabled: !w.enabled } : w
-    )
-    setWidgets(updatedWidgets)
-    dispatch({ type: "UPDATE_DASHBOARD_WIDGETS", payload: updatedWidgets })
-    await updateDashboardWidgets(updatedWidgets)
-  }
-
   const addWidget = async (type: WidgetType) => {
     const newWidget: DashboardWidget = {
       id: generateId(),
@@ -331,110 +287,339 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     await updateDashboardWidgets(updatedWidgets)
   }
 
-  const handleResizeStart = (e: React.MouseEvent, widgetId: string, type: 'width' | 'height' | 'both') => {
-    e.preventDefault()
-    e.stopPropagation()
-    const widget = widgets.find((w) => w.id === widgetId)
-    if (!widget) return
-
-    setResizingWidget(widgetId)
-    setResizeType(type)
-    setResizeStart({
-      x: e.clientX,
-      y: e.clientY,
-      width: widget.width,
-      height: widget.height,
-    })
-  }
-
-  const handleResizeMove = (e: MouseEvent) => {
-    if (!resizingWidget || !resizeStart || !resizeType) return
-
-    const deltaX = e.clientX - resizeStart.x
-    const deltaY = e.clientY - resizeStart.y
-
-    // Calcul plus précis et fluide : chaque 60px = 1 unité
-    const columnWidth = 60
-    const rowHeight = 60
-    
-    let newWidth = resizeStart.width
-    let newHeight = resizeStart.height
-
-    // Calculer la nouvelle largeur si on resize en largeur
-    if (resizeType === 'width' || resizeType === 'both') {
-      newWidth = Math.max(1, Math.min(4, resizeStart.width + Math.floor(deltaX / columnWidth))) as 1 | 2 | 3 | 4
-    }
-
-    // Calculer la nouvelle hauteur si on resize en hauteur
-    if (resizeType === 'height' || resizeType === 'both') {
-      newHeight = Math.max(1, Math.min(2, resizeStart.height + Math.floor(deltaY / rowHeight))) as 1 | 2
-    }
-
-    // Mise à jour instantanée
-    const widget = widgets.find((w) => w.id === resizingWidget)
-    if (widget && (newWidth !== widget.width || newHeight !== widget.height)) {
-      const updatedWidgets = widgets.map((w) =>
-        w.id === resizingWidget ? { ...w, width: newWidth as 1 | 2 | 3 | 4, height: newHeight as 1 | 2 } : w
-      )
-      setWidgets(updatedWidgets)
-    }
-  }
-
-  const handleResizeEnd = async () => {
-    if (resizingWidget) {
-      dispatch({ type: "UPDATE_DASHBOARD_WIDGETS", payload: widgets })
-      await updateDashboardWidgets(widgets)
-    }
-    setResizingWidget(null)
-    setResizeStart(null)
-    setResizeType(null)
-  }
-
-  // Ajouter les event listeners pour le resize
-  useEffect(() => {
-    if (resizingWidget) {
-      window.addEventListener('mousemove', handleResizeMove)
-      window.addEventListener('mouseup', handleResizeEnd)
-      return () => {
-        window.removeEventListener('mousemove', handleResizeMove)
-        window.removeEventListener('mouseup', handleResizeEnd)
-      }
-    }
-  }, [resizingWidget])
-
-  const changeWidgetType = async (widgetId: string, newType: WidgetType) => {
-    const updatedWidgets = widgets.map((w) =>
-      w.id === widgetId ? { ...w, type: newType } : w
-    )
-    setWidgets(updatedWidgets)
-    dispatch({ type: "UPDATE_DASHBOARD_WIDGETS", payload: updatedWidgets })
-    await updateDashboardWidgets(updatedWidgets)
-    setEditingWidget(null)
-    setEditWidgetType(null)
-  }
-
-  const deleteWidget = async (widgetId: string) => {
-    const updatedWidgets = widgets.filter((w) => w.id !== widgetId)
-    setWidgets(updatedWidgets)
-    dispatch({ type: "UPDATE_DASHBOARD_WIDGETS", payload: updatedWidgets })
-    await updateDashboardWidgets(updatedWidgets)
-  }
-
   const resetToDefault = async () => {
     const defaultWidgets: DashboardWidget[] = [
-      { id: "1", type: "routine-progress", enabled: true, order: 0, width: 1, height: 1 },
-      { id: "2", type: "missions-stats", enabled: true, order: 1, width: 1, height: 1 },
-      { id: "3", type: "tasks-stats", enabled: true, order: 2, width: 1, height: 1 },
-      { id: "4", type: "projects-stats", enabled: true, order: 3, width: 1, height: 1 },
-      { id: "5", type: "routine-list", enabled: true, order: 4, width: 2, height: 1 },
-      { id: "6", type: "today-missions", enabled: true, order: 5, width: 2, height: 1 },
-      { id: "7", type: "week-missions", enabled: true, order: 6, width: 2, height: 1 },
-      { id: "8", type: "active-projects", enabled: true, order: 7, width: 2, height: 1 },
+      { id: "1", type: "routine-progress", enabled: true, order: 0, width: 1, height: 1, row: 0, col: 0 },
+      { id: "2", type: "missions-stats", enabled: true, order: 1, width: 1, height: 1, row: 0, col: 1 },
+      { id: "3", type: "tasks-stats", enabled: true, order: 2, width: 1, height: 1, row: 0, col: 2 },
+      { id: "4", type: "projects-stats", enabled: true, order: 3, width: 1, height: 1, row: 0, col: 3 },
+      { id: "5", type: "routine-list", enabled: true, order: 4, width: 2, height: 1, row: 1, col: 0 },
+      { id: "6", type: "today-missions", enabled: true, order: 5, width: 2, height: 1, row: 1, col: 2 },
+      { id: "7", type: "week-missions", enabled: true, order: 6, width: 2, height: 1, row: 2, col: 0 },
+      { id: "8", type: "active-projects", enabled: true, order: 7, width: 2, height: 1, row: 2, col: 2 },
     ]
     setWidgets(defaultWidgets)
     dispatch({ type: "UPDATE_DASHBOARD_WIDGETS", payload: defaultWidgets })
     await updateDashboardWidgets(defaultWidgets)
     setShowResetConfirm(false)
+  }
+
+  // Fonctions pour l'éditeur de grille avancé
+  const openGridEditor = () => {
+    setEditorWidgets([...widgets])
+    setEditorMobileWidgets([...widgets]) // Clone pour mobile
+    setSeparateMobileLayout(false)
+    setEditingMobileLayout(false)
+    setGridEditorOpen(true)
+  }
+
+  const closeGridEditor = () => {
+    setGridEditorOpen(false)
+    setGridSelectionStart(null)
+    setGridSelectionEnd(null)
+    setIsSelecting(false)
+    setSelectedWidgetType(null)
+    setDraggedAvailableWidget(null)
+    setDraggingEditorWidget(null)
+    setEditingWidget(null)
+    setEditWidgetType(null)
+    setShowMobileWidgetPanel(false)
+    setResizingWidget(null)
+    setResizeStartPos(null)
+    setEditingMobileLayout(false)
+  }
+
+  const applyGridChanges = async () => {
+    // Pour l'instant on utilise juste les widgets desktop
+    // TODO: Si separateMobileLayout, sauvegarder aussi les widgets mobile
+    setWidgets(editorWidgets)
+    dispatch({ type: "UPDATE_DASHBOARD_WIDGETS", payload: editorWidgets })
+    await updateDashboardWidgets(editorWidgets)
+    closeGridEditor()
+  }
+
+  // Fonction pour gérer le début du redimensionnement dynamique
+  const handleResizeStart = (e: React.MouseEvent, widgetId: string, edge: "right" | "bottom" | "corner" | "left" | "top") => {
+    e.preventDefault()
+    e.stopPropagation()
+    setResizingWidget({ id: widgetId, edge })
+    setResizeStartPos({ x: e.clientX, y: e.clientY })
+  }
+
+  // Fonction pour gérer le redimensionnement dynamique
+  const handleResizeMove = (e: React.MouseEvent) => {
+    if (!resizingWidget || !resizeStartPos) return
+    
+    const widget = (editingMobileLayout ? editorMobileWidgets : editorWidgets).find(w => w.id === resizingWidget.id)
+    if (!widget || widget.row === undefined || widget.col === undefined) return
+
+    const cellSize = 80 // Taille approximative d'une cellule
+    const deltaX = e.clientX - resizeStartPos.x
+    const deltaY = e.clientY - resizeStartPos.y
+    
+    let newWidth: 1 | 2 | 3 | 4 = widget.width
+    let newHeight: 1 | 2 | 3 | 4 | 5 | 6 = widget.height
+    let newRow = widget.row
+    let newCol = widget.col
+
+    // Redimensionnement horizontal (droite/gauche)
+    if (resizingWidget.edge === "right" || resizingWidget.edge === "corner") {
+      if (deltaX > cellSize / 2 && widget.width < gridCols && widget.col + widget.width < gridCols) {
+        newWidth = Math.min(widget.width + 1, gridCols) as 1 | 2 | 3 | 4
+        setResizeStartPos({ x: e.clientX, y: resizeStartPos.y })
+      } else if (deltaX < -cellSize / 2 && widget.width > 1) {
+        newWidth = Math.max(widget.width - 1, 1) as 1 | 2 | 3 | 4
+        setResizeStartPos({ x: e.clientX, y: resizeStartPos.y })
+      }
+    } else if (resizingWidget.edge === "left") {
+      if (deltaX < -cellSize / 2 && widget.width < gridCols && widget.col > 0) {
+        newWidth = Math.min(widget.width + 1, gridCols) as 1 | 2 | 3 | 4
+        newCol = Math.max(widget.col - 1, 0)
+        setResizeStartPos({ x: e.clientX, y: resizeStartPos.y })
+      } else if (deltaX > cellSize / 2 && widget.width > 1) {
+        newWidth = Math.max(widget.width - 1, 1) as 1 | 2 | 3 | 4
+        newCol = widget.col + 1
+        setResizeStartPos({ x: e.clientX, y: resizeStartPos.y })
+      }
+    }
+
+    // Redimensionnement vertical (bas/haut)
+    if (resizingWidget.edge === "bottom" || resizingWidget.edge === "corner") {
+      const maxHeight = editingMobileLayout ? 6 : 2
+      if (deltaY > cellSize / 2 && widget.height < maxHeight && widget.row + widget.height < gridRows) {
+        newHeight = Math.min(widget.height + 1, maxHeight) as 1 | 2 | 3 | 4 | 5 | 6
+        setResizeStartPos({ x: resizeStartPos.x, y: e.clientY })
+      } else if (deltaY < -cellSize / 2 && widget.height > 1) {
+        newHeight = Math.max(widget.height - 1, 1) as 1 | 2 | 3 | 4 | 5 | 6
+        setResizeStartPos({ x: resizeStartPos.x, y: e.clientY })
+      }
+    } else if (resizingWidget.edge === "top") {
+      const maxHeight = editingMobileLayout ? 6 : 2
+      if (deltaY < -cellSize / 2 && widget.height < maxHeight && widget.row > 0) {
+        newHeight = Math.min(widget.height + 1, maxHeight) as 1 | 2 | 3 | 4 | 5 | 6
+        newRow = Math.max(widget.row - 1, 0)
+        setResizeStartPos({ x: resizeStartPos.x, y: e.clientY })
+      } else if (deltaY > cellSize / 2 && widget.height > 1) {
+        newHeight = Math.max(widget.height - 1, 1) as 1 | 2 | 3 | 4 | 5 | 6
+        newRow = widget.row + 1
+        setResizeStartPos({ x: resizeStartPos.x, y: e.clientY })
+      }
+    }
+
+    if (newWidth !== widget.width || newHeight !== widget.height || newRow !== widget.row || newCol !== widget.col) {
+      if (canPlaceWidget(newRow, newCol, newWidth, newHeight, widget.id)) {
+        const updateFn = editingMobileLayout ? setEditorMobileWidgets : setEditorWidgets
+        const currentWidgets = editingMobileLayout ? editorMobileWidgets : editorWidgets
+        updateFn(currentWidgets.map(w =>
+          w.id === widget.id ? { ...w, width: newWidth, height: newHeight, row: newRow, col: newCol } : w
+        ))
+      }
+    }
+  }
+
+  const handleResizeEnd = () => {
+    setResizingWidget(null)
+    setResizeStartPos(null)
+  }
+
+  // Widgets à afficher dans l'éditeur selon le mode
+  const currentEditorWidgets = editingMobileLayout ? editorMobileWidgets : editorWidgets
+  const setCurrentEditorWidgets = editingMobileLayout ? setEditorMobileWidgets : setEditorWidgets
+  
+  // Dimensions de grille selon le mode
+  const gridCols = editingMobileLayout ? 2 : 4
+  const gridRows = editingMobileLayout ? 6 : 4
+
+  const getGridOccupancy = (widgetList: DashboardWidget[] = currentEditorWidgets) => {
+    const grid: (string | null)[][] = Array(gridRows).fill(null).map(() => Array(gridCols).fill(null))
+    widgetList.filter(w => w.enabled && w.row !== undefined && w.col !== undefined).forEach(widget => {
+      for (let r = widget.row!; r < Math.min(widget.row! + widget.height, gridRows); r++) {
+        for (let c = widget.col!; c < Math.min(widget.col! + widget.width, gridCols); c++) {
+          grid[r][c] = widget.id
+        }
+      }
+    })
+    return grid
+  }
+
+  const canPlaceWidget = (row: number, col: number, width: number, height: number, excludeId?: string) => {
+    if (row + height > gridRows || col + width > gridCols) return false
+    const grid = getGridOccupancy(currentEditorWidgets)
+    for (let r = row; r < row + height; r++) {
+      for (let c = col; c < col + width; c++) {
+        if (grid[r][c] !== null && grid[r][c] !== excludeId) return false
+      }
+    }
+    return true
+  }
+
+  const handleGridCellMouseDown = (row: number, col: number) => {
+    const grid = getGridOccupancy()
+    const widgetId = grid[row][col]
+    
+    if (widgetId) {
+      // Sélection d'un widget existant pour modification
+      const widget = editorWidgets.find(w => w.id === widgetId)
+      if (widget) {
+        setEditingWidget(widgetId)
+        setEditWidgetType(widget.type)
+      }
+      return
+    }
+    
+    // Commencer une nouvelle sélection
+    setGridSelectionStart({ row, col })
+    setGridSelectionEnd({ row, col })
+    setIsSelecting(true)
+  }
+
+  const handleGridCellMouseEnter = (row: number, col: number) => {
+    setHoveredCell({ row, col })
+    if (isSelecting && gridSelectionStart) {
+      setGridSelectionEnd({ row, col })
+    }
+  }
+
+  const handleGridCellMouseUp = () => {
+    if (isSelecting && gridSelectionStart && gridSelectionEnd) {
+      const minRow = Math.min(gridSelectionStart.row, gridSelectionEnd.row)
+      const maxRow = Math.max(gridSelectionStart.row, gridSelectionEnd.row)
+      const minCol = Math.min(gridSelectionStart.col, gridSelectionEnd.col)
+      const maxCol = Math.max(gridSelectionStart.col, gridSelectionEnd.col)
+      
+      const width = (maxCol - minCol + 1) as 1 | 2 | 3 | 4
+      const maxHeight = editingMobileLayout ? 6 : 2
+      const height = Math.min(maxRow - minRow + 1, maxHeight) as 1 | 2 | 3 | 4 | 5 | 6
+      
+      if (canPlaceWidget(minRow, minCol, width, height)) {
+        // Ouvrir le sélecteur de widget
+        setGridSelectionStart({ row: minRow, col: minCol })
+        setGridSelectionEnd({ row: minRow + height - 1, col: minCol + width - 1 })
+      } else {
+        setGridSelectionStart(null)
+        setGridSelectionEnd(null)
+      }
+    }
+    setIsSelecting(false)
+  }
+
+  const addWidgetToGrid = (type: WidgetType) => {
+    if (!gridSelectionStart || !gridSelectionEnd) return
+    
+    const minRow = Math.min(gridSelectionStart.row, gridSelectionEnd.row)
+    const maxRow = Math.max(gridSelectionStart.row, gridSelectionEnd.row)
+    const minCol = Math.min(gridSelectionStart.col, gridSelectionEnd.col)
+    const maxCol = Math.max(gridSelectionStart.col, gridSelectionEnd.col)
+    
+    const width = (maxCol - minCol + 1) as 1 | 2 | 3 | 4
+    const maxHeight = editingMobileLayout ? 6 : 2
+    const height: 1 | 2 | 3 | 4 | 5 | 6 = Math.min(maxRow - minRow + 1, maxHeight) as 1 | 2 | 3 | 4 | 5 | 6
+    
+    const newWidget: DashboardWidget = {
+      id: generateId(),
+      type,
+      enabled: true,
+      order: currentEditorWidgets.length,
+      width,
+      height,
+      row: minRow,
+      col: minCol,
+    }
+    
+    setCurrentEditorWidgets([...currentEditorWidgets, newWidget])
+    setGridSelectionStart(null)
+    setGridSelectionEnd(null)
+    setSelectedWidgetType(null)
+  }
+
+  const removeWidgetFromGrid = (widgetId: string) => {
+    setCurrentEditorWidgets(currentEditorWidgets.filter(w => w.id !== widgetId))
+    setEditingWidget(null)
+    setEditWidgetType(null)
+  }
+
+  const updateWidgetInGrid = (widgetId: string, newType: WidgetType) => {
+    setCurrentEditorWidgets(currentEditorWidgets.map(w =>
+      w.id === widgetId ? { ...w, type: newType } : w
+    ))
+    setEditingWidget(null)
+    setEditWidgetType(null)
+  }
+
+  const handleDropOnGrid = (row: number, col: number) => {
+    // Déplacement d'un widget existant
+    if (draggingEditorWidget) {
+      const widget = currentEditorWidgets.find(w => w.id === draggingEditorWidget)
+      if (widget && canPlaceWidget(row, col, widget.width, widget.height, draggingEditorWidget)) {
+        setCurrentEditorWidgets(currentEditorWidgets.map(w =>
+          w.id === draggingEditorWidget ? { ...w, row, col } : w
+        ))
+      }
+      setDraggingEditorWidget(null)
+      return
+    }
+    
+    // Ajout d'un nouveau widget depuis le panneau
+    if (draggedAvailableWidget) {
+      if (canPlaceWidget(row, col, 1, 1)) {
+        const newWidget: DashboardWidget = {
+          id: generateId(),
+          type: draggedAvailableWidget,
+          enabled: true,
+          order: currentEditorWidgets.length,
+          width: 1,
+          height: 1,
+          row,
+          col,
+        }
+        setCurrentEditorWidgets([...currentEditorWidgets, newWidget])
+      }
+      setDraggedAvailableWidget(null)
+    }
+  }
+
+  const moveWidgetToCell = (widgetId: string, row: number, col: number) => {
+    const widget = currentEditorWidgets.find(w => w.id === widgetId)
+    if (!widget) return
+    
+    if (canPlaceWidget(row, col, widget.width, widget.height, widgetId)) {
+      setCurrentEditorWidgets(currentEditorWidgets.map(w =>
+        w.id === widgetId ? { ...w, row, col } : w
+      ))
+    }
+  }
+
+  const canDropWidgetAt = (row: number, col: number) => {
+    if (draggingEditorWidget) {
+      const widget = currentEditorWidgets.find(w => w.id === draggingEditorWidget)
+      if (widget) {
+        return canPlaceWidget(row, col, widget.width, widget.height, draggingEditorWidget)
+      }
+    }
+    if (draggedAvailableWidget) {
+      return canPlaceWidget(row, col, 1, 1)
+    }
+    return false
+  }
+
+  const resizeWidgetInGrid = (widgetId: string, newWidth: 1 | 2 | 3 | 4, newHeight: 1 | 2 | 3 | 4 | 5 | 6) => {
+    const widget = currentEditorWidgets.find(w => w.id === widgetId)
+    if (!widget || widget.row === undefined || widget.col === undefined) return
+    
+    if (canPlaceWidget(widget.row, widget.col, newWidth, newHeight, widgetId)) {
+      setCurrentEditorWidgets(currentEditorWidgets.map(w =>
+        w.id === widgetId ? { ...w, width: newWidth, height: newHeight } : w
+      ))
+    }
+  }
+
+  const isInSelection = (row: number, col: number) => {
+    if (!gridSelectionStart || !gridSelectionEnd) return false
+    const minRow = Math.min(gridSelectionStart.row, gridSelectionEnd.row)
+    const maxRow = Math.max(gridSelectionStart.row, gridSelectionEnd.row)
+    const minCol = Math.min(gridSelectionStart.col, gridSelectionEnd.col)
+    const maxCol = Math.max(gridSelectionStart.col, gridSelectionEnd.col)
+    return row >= minRow && row <= maxRow && col >= minCol && col <= maxCol
   }
 
   const renderWidget = (widget: DashboardWidget) => {
@@ -871,11 +1056,402 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           </Card>
         )
 
-      default:
+      case "night-routine-list":
+        return (
+          <Card className="h-full w-full flex flex-col">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div>
+                <CardTitle className="text-lg">Routine du soir</CardTitle>
+                <CardDescription>
+                  {todayNightLogs.filter((l) => l.completed).length}/{state.nightRoutineActions.length} complétées
+                </CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => onNavigate("routine")}>
+                Voir tout
+                <ChevronRight className="ml-1 size-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-2 flex-1 overflow-auto">
+              {state.nightRoutineActions.slice(0, 5).map((action) => {
+                const log = todayNightLogs.find((l) => l.actionId === action.id)
+                const isCompleted = log?.completed || false
+
+                return (
+                  <div
+                    key={action.id}
+                    className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        checked={isCompleted}
+                        disabled
+                      />
+                      <div>
+                        <p className={`text-sm font-medium ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
+                          {action.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground capitalize">
+                          {action.importance === "high" ? "Important" : action.importance === "medium" ? "Moyen" : "Optionnel"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </CardContent>
+          </Card>
+        )
+
+      case "mission-priority-high":
+        const highPriorityMissions = state.missions.filter(
+          (m) => m.priority === "high" && m.status !== "done"
+        ).slice(0, 4)
+        return (
+          <Card className="h-full w-full flex flex-col">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div>
+                <CardTitle className="text-lg">Missions urgentes</CardTitle>
+                <CardDescription>{highPriorityMissions.length} en haute priorité</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => onNavigate("missions")}>
+                Voir tout
+                <ChevronRight className="ml-1 size-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-2 flex-1 overflow-auto">
+              {highPriorityMissions.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  Aucune mission urgente
+                </p>
+              ) : (
+                highPriorityMissions.map((mission) => (
+                  <div
+                    key={mission.id}
+                    className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 p-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Target className="size-4 text-destructive" />
+                      <p className="text-sm font-medium">{mission.title}</p>
+                    </div>
+                    <Badge variant="destructive">Haute</Badge>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        )
+
+      case "tasks-today":
+        const todayTasks = state.tasks.filter(
+          (t) => t.dueDate === today && t.status !== "done"
+        ).slice(0, 5)
+        return (
+          <Card className="h-full w-full flex flex-col">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div>
+                <CardTitle className="text-lg">Tâches du jour</CardTitle>
+                <CardDescription>{todayTasks.length} à faire</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => onNavigate("projects")}>
+                Voir tout
+                <ChevronRight className="ml-1 size-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-2 flex-1 overflow-auto">
+              {todayTasks.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  Aucune tâche pour aujourd&apos;hui
+                </p>
+              ) : (
+                todayTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                  >
+                    <Circle className="size-4 text-muted-foreground" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{task.title}</p>
+                      {task.projectId && (
+                        <p className="text-xs text-muted-foreground">
+                          {state.projects.find((p) => p.id === task.projectId)?.title || "Projet"}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        )
+
+      case "tasks-urgent":
+        const urgentTasks = state.tasks.filter((t) => {
+          if (t.status === "done" || !t.dueDate) return false
+          const dueDate = new Date(t.dueDate)
+          const now = new Date()
+          const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+          return diffDays <= 3 && diffDays >= 0
+        }).slice(0, 4)
+        return (
+          <Card className="h-full w-full flex flex-col">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div>
+                <CardTitle className="text-lg">Tâches urgentes</CardTitle>
+                <CardDescription>Deadline dans 3 jours ou moins</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => onNavigate("projects")}>
+                Voir tout
+                <ChevronRight className="ml-1 size-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-2 flex-1 overflow-auto">
+              {urgentTasks.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  Aucune tâche urgente
+                </p>
+              ) : (
+                urgentTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="flex items-center gap-3 rounded-lg border border-orange-500/30 bg-orange-500/5 p-3"
+                  >
+                    <Clock className="size-4 text-orange-500" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{task.title}</p>
+                      <p className="text-xs text-orange-600">
+                        {formatDateFr(task.dueDate!, "short")}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        )
+
+      case "project-progress":
+        return (
+          <Card className="h-full w-full flex flex-col">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div>
+                <CardTitle className="text-lg">Progression des projets</CardTitle>
+                <CardDescription>{activeProjects.length} projets en cours</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => onNavigate("projects")}>
+                Voir tout
+                <ChevronRight className="ml-1 size-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3 flex-1 overflow-auto">
+              {activeProjects.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  Aucun projet en cours
+                </p>
+              ) : (
+                activeProjects.slice(0, 4).map((project) => {
+                  const progress = getProjectProgress(project.id)
+                  return (
+                    <div key={project.id} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium truncate">{project.title}</span>
+                        <span className="text-muted-foreground">{progress}%</span>
+                      </div>
+                      <Progress value={progress} className="h-2" />
+                    </div>
+                  )
+                })
+              )}
+            </CardContent>
+          </Card>
+        )
+
+      case "sleep-last-night":
+        const lastSleepLog = state.sleepLogs.length > 0 
+          ? state.sleepLogs[state.sleepLogs.length - 1] 
+          : null
         return (
           <Card className="h-full w-full flex flex-col">
             <CardContent className="p-4 flex-1 flex flex-col justify-center">
-              <p className="text-sm text-muted-foreground text-center">Widget en développement</p>
+              {lastSleepLog ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">Dernière nuit</p>
+                    <div className="rounded-full bg-blue-500/10 p-2">
+                      <Bed className="size-5 text-blue-600" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-lg bg-muted/50 p-2 text-center">
+                      <p className="text-lg font-bold">{Math.round(lastSleepLog.duration / 60)}h</p>
+                      <p className="text-xs text-muted-foreground">Durée</p>
+                    </div>
+                    <div className="rounded-lg bg-muted/50 p-2 text-center">
+                      <p className="text-lg font-bold">{lastSleepLog.quality}%</p>
+                      <p className="text-xs text-muted-foreground">Qualité</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center">
+                    {formatDateFr(lastSleepLog.date, "short")}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center">
+                  Aucune donnée de sommeil
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )
+
+      case "workout-last-session":
+        const lastWorkout = state.workoutSessions.filter((w) => w.completed)
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+        const lastWorkoutProgram = lastWorkout?.programId 
+          ? state.workoutPrograms.find(p => p.id === lastWorkout.programId) 
+          : null
+        return (
+          <Card className="h-full w-full flex flex-col">
+            <CardContent className="p-4 flex-1 flex flex-col justify-center">
+              {lastWorkout ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">Dernier entraînement</p>
+                    <div className="rounded-full bg-orange-500/10 p-2">
+                      <Dumbbell className="size-5 text-orange-600" />
+                    </div>
+                  </div>
+                  <p className="text-lg font-bold truncate">
+                    {lastWorkoutProgram?.name || lastWorkout.customType || lastWorkout.type}
+                  </p>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <span>{lastWorkout.duration} min</span>
+                    <span className="capitalize">{lastWorkout.intensity}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDateFr(lastWorkout.date, "short")}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center">
+                  Aucun entraînement récent
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )
+
+      case "workout-calories":
+        // Estimation des calories basée sur l'intensité et la durée
+        const estimateCalories = (duration: number, intensity: string) => {
+          const caloriesPerMinute = intensity === "intense" ? 12 : intensity === "moderate" ? 8 : 5
+          return duration * caloriesPerMinute
+        }
+        const weekCalories = state.workoutSessions
+          .filter((w) => {
+            const weekAgo = new Date()
+            weekAgo.setDate(weekAgo.getDate() - 7)
+            const workoutDate = new Date(w.date)
+            return workoutDate >= weekAgo && w.completed
+          })
+          .reduce((sum, w) => sum + estimateCalories(w.duration, w.intensity), 0)
+        return (
+          <Card className="h-full w-full flex flex-col">
+            <CardContent className="p-4 flex-1 flex flex-col justify-center">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Calories brûlées</p>
+                  <p className="text-2xl font-bold">{weekCalories}</p>
+                  <p className="text-xs text-muted-foreground">Cette semaine (estimé)</p>
+                </div>
+                <div className="rounded-full bg-orange-500/10 p-2">
+                  <Flame className="size-5 text-orange-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+
+      case "nutrition-daily":
+        // Simulé - à connecter aux vraies données
+        return (
+          <Card className="h-full w-full flex flex-col">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div>
+                <CardTitle className="text-lg">Nutrition du jour</CardTitle>
+                <CardDescription>Vos apports</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => onNavigate("cuisine")}>
+                Voir tout
+                <ChevronRight className="ml-1 size-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col justify-center">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-lg bg-green-500/10 p-2">
+                  <p className="text-lg font-bold text-green-600">0</p>
+                  <p className="text-[10px] text-muted-foreground">Recettes</p>
+                </div>
+                <div className="rounded-lg bg-blue-500/10 p-2">
+                  <p className="text-lg font-bold text-blue-600">0</p>
+                  <p className="text-[10px] text-muted-foreground">kcal</p>
+                </div>
+                <div className="rounded-lg bg-orange-500/10 p-2">
+                  <p className="text-lg font-bold text-orange-600">0g</p>
+                  <p className="text-[10px] text-muted-foreground">Protéines</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+
+      case "nutrition-macros":
+        // Simulé - à connecter aux vraies données
+        return (
+          <Card className="h-full w-full flex flex-col">
+            <CardContent className="p-4 flex-1 flex flex-col justify-center">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium">Macronutriments</p>
+                <div className="rounded-full bg-green-500/10 p-2">
+                  <Apple className="size-4 text-green-600" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span>Protéines</span>
+                    <span className="text-muted-foreground">0g / 120g</span>
+                  </div>
+                  <Progress value={0} className="h-1.5" />
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span>Glucides</span>
+                    <span className="text-muted-foreground">0g / 250g</span>
+                  </div>
+                  <Progress value={0} className="h-1.5" />
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span>Lipides</span>
+                    <span className="text-muted-foreground">0g / 65g</span>
+                  </div>
+                  <Progress value={0} className="h-1.5" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+
+      default:
+        // Fallback pour les types de widgets non implémentés
+        const defaultConfig = WIDGET_LABELS[widget.type as WidgetType]
+        const DefaultIcon = defaultConfig?.icon || Target
+        return (
+          <Card className="h-full w-full flex flex-col">
+            <CardContent className="p-4 flex-1 flex flex-col items-center justify-center">
+              <DefaultIcon className="size-8 text-muted-foreground mb-2" />
+              <p className="text-sm font-medium text-center">{defaultConfig?.label || widget.type}</p>
+              <p className="text-xs text-muted-foreground text-center mt-1">{defaultConfig?.description || ""}</p>
             </CardContent>
           </Card>
         )
@@ -893,11 +1469,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={resetToDefault} className="flex-1 sm:flex-none">
+          <Button variant="outline" size="sm" onClick={() => setShowResetConfirm(true)} className="flex-1 sm:flex-none">
             <RotateCcw className="mr-1 sm:mr-2 size-3 sm:size-4" />
             <span className="text-xs sm:text-sm">Par défaut</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowWidgetConfig(true)} className="flex-1 sm:flex-none">
+          <Button variant="outline" size="sm" onClick={openGridEditor} className="flex-1 sm:flex-none">
             <Settings className="mr-1 sm:mr-2 size-3 sm:size-4" />
             <span className="text-xs sm:text-sm">Personnaliser</span>
           </Button>
@@ -949,434 +1525,690 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
 
       {/* Widgets Grid */}
       {enabledWidgets.length === 0 ? (
-        <div className="grid gap-4 grid-cols-4 auto-rows-[200px]">
+        <div className="grid gap-2 sm:gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 auto-rows-[120px] sm:auto-rows-[150px]">
           {/* Aperçu des widgets par défaut en pointillés */}
-          <Card className="py-0 col-span-2 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-                onClick={() => addWidget("today-missions")}>
-            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
-              <Target className="size-8 text-muted-foreground mb-2" />
-              <p className="text-sm font-medium text-muted-foreground">Missions du jour</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">Vos tâches importantes</p>
-              <Button 
-                size="icon" 
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                variant="ghost"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  addWidget("today-missions")
-                }}
-              >
-                <Plus className="size-5" />
-              </Button>
+          <Card 
+            className="py-0 col-span-2 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+            onClick={openGridEditor}
+          >
+            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
+              <CheckCircle2 className="size-6 text-muted-foreground mb-1" />
+              <p className="text-xs font-medium text-muted-foreground">Routine</p>
             </CardContent>
           </Card>
           
-          <Card className="py-0 col-span-2 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-                onClick={() => addWidget("tasks-stats")}>
-            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
-              <CheckCircle2 className="size-8 text-muted-foreground mb-2" />
-              <p className="text-sm font-medium text-muted-foreground">Tâches rapides</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">Actions à compléter</p>
-              <Button 
-                size="icon" 
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                variant="ghost"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  addWidget("tasks-stats")
-                }}
-              >
-                <Plus className="size-5" />
-              </Button>
+          <Card 
+            className="py-0 col-span-2 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+            onClick={openGridEditor}
+          >
+            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
+              <Target className="size-6 text-muted-foreground mb-1" />
+              <p className="text-xs font-medium text-muted-foreground">Missions</p>
             </CardContent>
           </Card>
 
-          <Card className="py-0 col-span-1 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-                onClick={() => addWidget("routine-progress")}>
-            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
-              <TrendingUp className="size-8 text-muted-foreground mb-2" />
-              <p className="text-xs font-medium text-muted-foreground">Progression</p>
-              <Button 
-                size="icon" 
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                variant="ghost"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  addWidget("routine-progress")
-                }}
-              >
-                <Plus className="size-5" />
-              </Button>
+          <Card 
+            className="py-0 col-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+            onClick={openGridEditor}
+          >
+            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
+              <Clock className="size-6 text-muted-foreground mb-1" />
+              <p className="text-xs font-medium text-muted-foreground">Tâches</p>
             </CardContent>
           </Card>
 
-          <Card className="py-0 col-span-1 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-                onClick={() => addWidget("routine-streak")}>
-            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
-              <Flame className="size-8 text-muted-foreground mb-2" />
-              <p className="text-xs font-medium text-muted-foreground">Série</p>
-              <Button 
-                size="icon" 
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                variant="ghost"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  addWidget("routine-streak")
-                }}
-              >
-                <Plus className="size-5" />
-              </Button>
+          <Card 
+            className="py-0 col-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+            onClick={openGridEditor}
+          >
+            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
+              <FolderOpen className="size-6 text-muted-foreground mb-1" />
+              <p className="text-xs font-medium text-muted-foreground">Projets</p>
             </CardContent>
           </Card>
 
-          <Card className="py-0 col-span-2 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-                onClick={() => addWidget("routine-list")}>
-            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
-              <Clock className="size-8 text-muted-foreground mb-2" />
-              <p className="text-sm font-medium text-muted-foreground">Routines</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">Vos habitudes quotidiennes</p>
-              <Button 
-                size="icon" 
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                variant="ghost"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  addWidget("routine-list")
-                }}
-              >
-                <Plus className="size-5" />
-              </Button>
+          <Card 
+            className="py-0 col-span-2 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+            onClick={openGridEditor}
+          >
+            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
+              <Sun className="size-6 text-muted-foreground mb-1" />
+              <p className="text-xs font-medium text-muted-foreground">Liste routine matinale</p>
+              <p className="text-[10px] text-muted-foreground/60">Vos habitudes quotidiennes</p>
             </CardContent>
           </Card>
 
-          <Card className="py-0 col-span-3 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-                onClick={() => addWidget("projects-stats")}>
-            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
-              <FolderKanban className="size-8 text-muted-foreground mb-2" />
-              <p className="text-sm font-medium text-muted-foreground">Progression projets</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">Vos projets personnels</p>
-              <Button 
-                size="icon" 
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                variant="ghost"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  addWidget("tasks-stats")
-                }}
-              >
-                <Plus className="size-5" />
-              </Button>
+          <Card 
+            className="py-0 col-span-3 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+            onClick={openGridEditor}
+          >
+            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
+              <Target className="size-6 text-muted-foreground mb-1" />
+              <p className="text-xs font-medium text-muted-foreground">Missions du jour</p>
+              <p className="text-[10px] text-muted-foreground/60">Vos objectifs importants</p>
             </CardContent>
           </Card>
 
-          <Card className="py-0 col-span-1 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-                onClick={() => addWidget("sleep-bedtime-cycles")}>
-            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
-              <BedDouble className="size-8 text-muted-foreground mb-2" />
-              <p className="text-xs font-medium text-muted-foreground">Heure de coucher</p>
-              <Button 
-                size="icon" 
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                variant="ghost"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  addWidget("routine-progress")
-                }}
-              >
-                <Plus className="size-5" />
-              </Button>
-            </CardContent>
-          </Card>
-          
-          <Card className="py-0 col-span-4 row-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-                onClick={() => addWidget("workout-summary")}>
-            <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center relative">
-              <Dumbbell className="size-8 text-muted-foreground mb-2" />
-              <p className="text-sm font-medium text-muted-foreground">Sport</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">Vos entraînements et calories de la semaine</p>
-              <Button 
-                size="icon" 
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                variant="ghost"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  addWidget("tasks-stats")
-                }}
-              >
-                <Plus className="size-5" />
-              </Button>
+          <Card 
+            className="py-0 col-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+            onClick={openGridEditor}
+          >
+            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
+              <Dumbbell className="size-6 text-muted-foreground mb-1" />
+              <p className="text-xs font-medium text-muted-foreground">Sport & entraînements</p>
             </CardContent>
           </Card>
 
+          <Card 
+            className="py-0 col-span-4 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
+            onClick={openGridEditor}
+          >
+            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
+              <Bed className="size-6 text-muted-foreground mb-1" />
+              <p className="text-xs font-medium text-muted-foreground">Sommeil & repos</p>
+            </CardContent>
+          </Card>
         </div>
       ) : (
         <div className="grid gap-2 sm:gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 auto-rows-[150px] sm:auto-rows-[200px]" style={{ gridAutoFlow: 'dense' }}>
           {enabledWidgets.map((widget) => (
           <div
             key={widget.id}
-            onDragOver={(e) => handleDragOver(e, widget.id)}
-            onDrop={(e) => handleDrop(e, widget.id)}
             className={cn(
-              "relative transition-all group",
-              widget.width === 1 && "col-span-1",
-              widget.width === 2 && "col-span-2 sm:col-span-2",
-              widget.width === 3 && "col-span-2 sm:col-span-3",
-              widget.width === 4 && "col-span-2 sm:col-span-3 md:col-span-4",
+              "relative transition-all",
               widget.height === 1 && "row-span-1",
               widget.height === 2 && "row-span-2",
-              draggedWidget === widget.id && "opacity-50",
-              dragOverWidget === widget.id && "ring-2 ring-primary"
             )}
+            style={{
+              gridColumn: widget.col !== undefined 
+                ? `${widget.col + 1} / span ${widget.width}` 
+                : `span ${Math.min(widget.width, 2)}`,
+              gridRow: widget.row !== undefined 
+                ? `${widget.row + 1} / span ${widget.height}` 
+                : undefined,
+            }}
           >
-            {/* Widget Controls */}
-            <div className="absolute top-1 right-1 sm:top-2 sm:right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="rounded-lg bg-background/0 hover:bg-background/40 transition-all p-1.5 flex gap-1.5">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 hover:bg-destructive/20 hover:scale-110"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setEditingWidget(widget.id)
-                    setEditWidgetType(widget.type)
-                  }}
-                  title="Changer le contenu"
-                >
-                  <Edit3 className="size-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 text-destructive hover:bg-destructive/20 hover:scale-110 transition-all"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    deleteWidget(widget.id)
-                  }}
-                  title="Supprimer"
-                >
-                  <Trash2 className="size-3" />
-                </Button>
-              </div>
-            </div>
-
-            {/* Drag Handle */}
-            <div
-              draggable={!resizingWidget}
-              onDragStart={(e) => handleDragStart(e, widget.id)}
-              onDragEnd={handleDragEnd} 
-              className="absolute top-2 left-2 z-10 rounded-full bg-background/800 hover:bg-opacity-100 hover:bg-background/340 p-1 opacity-0 group-hover:opacity-100 transition-all cursor-grab active:cursor-grabbing"
-              title="Déplacer"
-            >
-              <GripVertical className="size-4 text-muted-foreground" />
-            </div>
-
             {/* Container avec h-full et w-full pour que la Card prenne tout l'espace */}
-            <div className="h-full w-full relative">
+            <div className="h-full w-full">
               {renderWidget(widget)}
-              
-              {/* Resize Handle - Largeur (bord droit) */}
-              <div
-                className="absolute top-0 right-0 z-30 w-2 h-full cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/20"
-                onMouseDown={(e) => handleResizeStart(e, widget.id, 'width')}
-                title="Glisser pour ajuster la largeur"
-              />
-              
-              {/* Resize Handle - Hauteur (bord bas) */}
-              <div
-                className="absolute bottom-0 left-0 z-30 w-full h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/20"
-                onMouseDown={(e) => handleResizeStart(e, widget.id, 'height')}
-                title="Glisser pour ajuster la hauteur"
-              />
-              
-              {/* Resize Handle - Les deux (coin bas-droit) */}
-              <div
-                className="absolute bottom-0 right-0 z-40 w-6 h-6 cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end"
-                onMouseDown={(e) => handleResizeStart(e, widget.id, 'both')}
-                title="Glisser pour ajuster largeur et hauteur"
-              >
-                <div className="w-3 h-3 border-r-3 border-b-3 border-primary/80 rounded-br-sm" style={{ borderWidth: '3px' }} />
-              </div>
-              
-              {/* Indicateur de taille pendant le resize */}
-              {resizingWidget === widget.id && (
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-primary text-primary-foreground px-3 py-2 rounded-lg shadow-lg font-bold text-sm pointer-events-none">
-                  {widget.width} × {widget.height}
-                </div>
-              )}
             </div>
           </div>
         ))}
         </div>
       )}
 
-      {/* Edit Widget Type Dialog */}
-      <Dialog open={editingWidget !== null} onOpenChange={(open) => {
-        if (!open) {
-          setEditingWidget(null)
-          setEditWidgetType(null)
-        }
-      }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Changer le contenu du widget</DialogTitle>
-            <DialogDescription>
-              Sélectionnez le nouveau type de contenu à afficher
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid grid-cols-2 gap-3 py-4">
-            {Object.entries(WIDGET_LABELS).map(([type, config]) => {
-              const Icon = config.icon
-              const isSelected = editWidgetType === type
-              return (
-                <button
-                  key={type}
-                  onClick={() => setEditWidgetType(type as WidgetType)}
-                  className={cn(
-                    "flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all hover:border-primary/50",
-                    isSelected && "border-primary bg-primary/5"
-                  )}
-                >
-                  <Icon className={cn("size-6", isSelected && "text-primary")} />
-                  <div className="text-center">
-                    <p className="text-sm font-medium">{config.label}</p>
-                    <p className="text-xs text-muted-foreground line-clamp-2">{config.description}</p>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-
-          <DialogFooter className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setEditingWidget(null)
-                setEditWidgetType(null)
-              }}
-              className="flex-1 sm:flex-initial"
-            >
-              Annuler
-            </Button>
-            <Button
-              onClick={() => {
-                if (editingWidget && editWidgetType) {
-                  changeWidgetType(editingWidget, editWidgetType)
-                }
-              }}
-              disabled={!editWidgetType}
-              className="flex-1 sm:flex-initial"
-            >
-              Appliquer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Widget Configuration Dialog */}
-      <Dialog open={showWidgetConfig} onOpenChange={setShowWidgetConfig}>
-        <DialogContent className="max-w-[90vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Personnaliser le tableau de bord</DialogTitle>
-            <DialogDescription>
-              Activez ou désactivez les widgets à afficher.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <h3 className="font-semibold text-sm">Widgets actifs</h3>
-              {widgets.filter((w) => w.enabled).length === 0 ? (
-                <p className="text-sm text-muted-foreground py-2">Aucun widget actif</p>
-              ) : (
-                widgets.filter((w) => w.enabled).map((widget) => {
-                const config = WIDGET_LABELS[widget.type]
-                const Icon = config.icon
-                return (
-                  <div
-                    key={widget.id}
-                    className="flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between rounded-lg border p-3"
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <Icon className="size-5 text-primary shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{config.label}</p>
-                        <p className="text-xs text-muted-foreground truncate">{config.description}</p>
-                      </div>
-                    </div>
+      {/* Éditeur de grille avancé - Style CSS Grid Generator */}
+      <Dialog open={gridEditorOpen} onOpenChange={(open) => !open && closeGridEditor()}>
+        <DialogContent className="max-w-[95vw] sm:max-w-5xl max-h-[90vh] overflow-hidden p-0">
+          <div className="flex flex-col h-[85vh] sm:h-[85vh]">
+            <DialogHeader className="p-3 sm:p-4 pb-2 border-b shrink-0">
+              <DialogTitle className="flex items-center gap-2 text-sm sm:text-base">
+                <Settings className="size-4 sm:size-5" />
+                Personnaliser le tableau de bord
+              </DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm hidden sm:block">
+                Glissez les widgets sur la grille (4×4 desktop, 2×6 mobile) ou sélectionnez des cellules
+              </DialogDescription>
+              
+              {/* Toggle Desktop/Mobile Layout */}
+              <div className="flex items-center gap-4 pt-2 flex-wrap">
+                <label className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
+                  <Checkbox 
+                    checked={separateMobileLayout} 
+                    onCheckedChange={(checked) => {
+                      setSeparateMobileLayout(checked === true)
+                      if (!checked) {
+                        setEditingMobileLayout(false)
+                      }
+                    }}
+                  />
+                  <span>Séparer la version mobile</span>
+                </label>
+                
+                {separateMobileLayout && (
+                  <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
                     <Button
-                      variant="ghost"
+                      variant={!editingMobileLayout ? "default" : "ghost"}
                       size="sm"
-                      onClick={() => toggleWidget(widget.id)}
-                      className="shrink-0 self-end sm:self-auto"
+                      className="h-7 px-2 text-xs gap-1"
+                      onClick={() => setEditingMobileLayout(false)}
                     >
-                      Masquer
+                      <Monitor className="size-3" />
+                      Desktop
+                    </Button>
+                    <Button
+                      variant={editingMobileLayout ? "default" : "ghost"}
+                      size="sm"
+                      className="h-7 px-2 text-xs gap-1"
+                      onClick={() => setEditingMobileLayout(true)}
+                    >
+                      <Smartphone className="size-3" />
+                      Mobile
                     </Button>
                   </div>
-                )
-              })
-              )}
-            </div>
+                )}
+              </div>
+            </DialogHeader>
 
-            <div className="space-y-2">
-              <h3 className="font-semibold text-sm">Widgets disponibles</h3>
-              
-              {Object.entries(
-                Object.entries(WIDGET_LABELS).reduce((acc, [type, config]) => {
-                  const category = config.category || "Autre"
-                  if (!acc[category]) acc[category] = []
-                  acc[category].push([type, config])
-                  return acc
-                }, {} as Record<string, [string, typeof WIDGET_LABELS[WidgetType]][]>)
-              ).map(([category, categoryWidgets]) => (
-                <div key={category} className="space-y-2 mb-4">
-                  <h4 className="text-xs font-semibold text-primary uppercase tracking-wide mt-3">
-                    {category}
-                  </h4>
-                  {categoryWidgets.map(([type, config]) => {
-                    const isEnabled = widgets.some((w) => w.type === type && w.enabled)
-                    if (isEnabled) return null
-                    
-                    const Icon = config.icon
-                    return (
-                      <div
-                        key={type}
-                        className="flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between rounded-lg border p-3 opacity-60 hover:opacity-100 transition-opacity"
-                      >
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <Icon className="size-5 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{config.label}</p>
-                            <p className="text-xs text-muted-foreground truncate">{config.description}</p>
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
+            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+              {/* Bouton mobile pour afficher les widgets */}
+              <div className="md:hidden p-2 border-b bg-muted/30 flex gap-2">
+                <Button 
+                  variant={showMobileWidgetPanel ? "default" : "outline"} 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={() => setShowMobileWidgetPanel(!showMobileWidgetPanel)}
+                >
+                  <Plus className="size-4 mr-2" />
+                  {showMobileWidgetPanel ? "Masquer widgets" : "Ajouter widget"}
+                </Button>
+                {editingWidget && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setEditingWidget(null)
+                      setEditWidgetType(null)
+                    }}
+                  >
+                    <X className="size-4 mr-1" />
+                    Fermer
+                  </Button>
+                )}
+              </div>
+
+              {/* Panneau mobile - Widgets disponibles (collapsible) */}
+              {showMobileWidgetPanel && (
+                <div className="md:hidden max-h-[200px] border-b bg-muted/30 p-3 overflow-y-auto">
+                  <div className="grid grid-cols-3 gap-2">
+                    {Object.entries(WIDGET_LABELS).map(([type, config]) => {
+                      const Icon = config.icon
+                      const isUsed = currentEditorWidgets.some((w) => w.type === type && w.enabled)
+                      return (
+                        <div
+                          key={type}
                           onClick={() => {
-                            const existingWidget = widgets.find((w) => w.type === type)
-                            if (existingWidget) {
-                              toggleWidget(existingWidget.id)
+                            if (gridSelectionStart && gridSelectionEnd) {
+                              addWidgetToGrid(type as WidgetType)
+                              setShowMobileWidgetPanel(false)
                             } else {
-                              addWidget(type as WidgetType)
+                              setSelectedWidgetType(type as WidgetType)
                             }
                           }}
-                          className="shrink-0 self-end sm:self-auto"
+                          className={cn(
+                            "flex flex-col items-center gap-1 p-2 rounded-lg border transition-all",
+                            "hover:border-primary/50 hover:bg-background",
+                            isUsed && "opacity-50",
+                            selectedWidgetType === type && "border-primary bg-primary/10"
+                          )}
                         >
-                          <Plus className="size-4 mr-1" />
-                          Ajouter
+                          <div className={cn(
+                            "p-1.5 rounded-md",
+                            isUsed ? "bg-muted" : "bg-primary/10"
+                          )}>
+                            <Icon className={cn("size-4", isUsed ? "text-muted-foreground" : "text-primary")} />
+                          </div>
+                          <p className="text-[10px] font-medium text-center leading-tight">{config.label}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Panneau de gauche - Widgets disponibles (desktop) */}
+              <div className="hidden md:block w-56 lg:w-64 border-r bg-muted/30 p-3 lg:p-4 overflow-y-auto shrink-0">
+                <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                  <Plus className="size-4" />
+                  Widgets disponibles
+                </h3>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Glissez un widget sur la grille ou sélectionnez des cellules
+                </p>
+
+                <div className="space-y-2">
+                  {Object.entries(
+                    Object.entries(WIDGET_LABELS).reduce((acc, [type, config]) => {
+                      const category = config.category || "Autre"
+                      if (!acc[category]) acc[category] = []
+                      acc[category].push([type, config])
+                      return acc
+                    }, {} as Record<string, [string, typeof WIDGET_LABELS[WidgetType]][]>)
+                  ).map(([category, categoryWidgets]) => (
+                    <div key={category} className="mb-4">
+                      <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
+                        {category}
+                      </h4>
+                      <div className="space-y-1">
+                        {categoryWidgets.map(([type, config]) => {
+                          const Icon = config.icon
+                          const isUsed = currentEditorWidgets.some((w) => w.type === type && w.enabled)
+                          return (
+                            <div
+                              key={type}
+                              draggable
+                              onDragStart={() => setDraggedAvailableWidget(type as WidgetType)}
+                              onDragEnd={() => setDraggedAvailableWidget(null)}
+                              onClick={() => {
+                                if (gridSelectionStart && gridSelectionEnd) {
+                                  addWidgetToGrid(type as WidgetType)
+                                } else {
+                                  setSelectedWidgetType(type as WidgetType)
+                                }
+                              }}
+                              className={cn(
+                                "flex items-center gap-2 p-2 rounded-lg border cursor-grab active:cursor-grabbing transition-all",
+                                "hover:border-primary/50 hover:bg-background",
+                                isUsed && "opacity-50",
+                                selectedWidgetType === type && "border-primary bg-primary/10",
+                                draggedAvailableWidget === type && "opacity-50 scale-95"
+                              )}
+                            >
+                              <div className={cn(
+                                "p-1.5 rounded-md",
+                                isUsed ? "bg-muted" : "bg-primary/10"
+                              )}>
+                                <Icon className={cn("size-3.5", isUsed ? "text-muted-foreground" : "text-primary")} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium truncate">{config.label}</p>
+                              </div>
+                              {isUsed && (
+                                <Badge variant="secondary" className="text-[9px] px-1 py-0">Utilisé</Badge>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Zone centrale - Grille dynamique */}
+              <div className="flex-1 p-2 sm:p-4 md:p-6 flex flex-col items-center bg-background overflow-auto">
+                <div className="flex-1 flex flex-col items-center justify-center w-full">
+                  <div className="mb-2 sm:mb-4 text-center">
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      {draggingEditorWidget ? (
+                        <span className="text-primary font-medium">
+                          Déposez le widget sur une cellule verte disponible
+                        </span>
+                      ) : gridSelectionStart && gridSelectionEnd ? (
+                        <>
+                          Sélection: {Math.abs(gridSelectionEnd.col - gridSelectionStart.col) + 1} × {Math.abs(gridSelectionEnd.row - gridSelectionStart.row) + 1}
+                          {selectedWidgetType ? (
+                            <span className="ml-2 text-primary hidden sm:inline">
+                              — Cliquez sur un widget pour l&apos;ajouter
+                            </span>
+                          ) : (
+                            <span className="ml-2 hidden sm:inline">
+                              — Sélectionnez un widget
+                            </span>
+                          )}
+                        </>
+                      ) : draggedAvailableWidget ? (
+                        "Déposez le widget sur une cellule vide"
+                      ) : (
+                        <span className="hidden sm:inline">
+                          {editingMobileLayout ? "Grille mobile 2×6 - " : "Grille desktop 4×4 - "}
+                          Glissez un widget pour le déplacer, ou sélectionnez des cellules
+                        </span>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Grille dynamique (2x6 mobile ou 4x4 desktop) */}
+                  <div 
+                    className={cn(
+                      "grid gap-2 p-2 sm:p-3 md:p-4 rounded-xl border-2 transition-all mx-auto",
+                      editingMobileLayout ? "grid-cols-2 grid-rows-6" : "grid-cols-4 grid-rows-4",
+                      editingMobileLayout 
+                        ? "w-[160px] h-[480px] sm:w-[180px] sm:h-[540px]" 
+                        : "w-[280px] h-[280px] sm:w-[360px] sm:h-[360px] md:w-[420px] md:h-[420px]",
+                      draggingEditorWidget || draggedAvailableWidget 
+                        ? "bg-muted/40 border-primary/30" 
+                        : "bg-muted/20 border-dashed",
+                      resizingWidget && "cursor-grabbing"
+                    )}
+                  onMouseLeave={() => {
+                    setHoveredCell(null)
+                    if (resizingWidget) handleResizeEnd()
+                  }}
+                  onMouseUp={(e) => {
+                    handleGridCellMouseUp()
+                    if (resizingWidget) handleResizeEnd()
+                  }}
+                  onMouseMove={resizingWidget ? handleResizeMove : undefined}
+                >
+                  {Array.from({ length: gridRows }).map((_, rowIndex) =>
+                    Array.from({ length: gridCols }).map((_, colIndex) => {
+                      const grid = getGridOccupancy()
+                      const widgetId = grid[rowIndex][colIndex]
+                      const widget = widgetId ? currentEditorWidgets.find(w => w.id === widgetId) : null
+                      const isWidgetOrigin = widget && widget.row === rowIndex && widget.col === colIndex
+                      const inSelection = isInSelection(rowIndex, colIndex)
+                      const isHovered = hoveredCell?.row === rowIndex && hoveredCell?.col === colIndex
+                      const isDragging = draggingEditorWidget || draggedAvailableWidget
+                      const canDropHere = canDropWidgetAt(rowIndex, colIndex)
+                      const isBeingDragged = widget && draggingEditorWidget === widget.id
+
+                      // Si c'est une cellule occupée mais pas l'origine, on la cache
+                      if (widgetId && !isWidgetOrigin) {
+                        return <div key={`${rowIndex}-${colIndex}`} className="hidden" />
+                      }
+
+                      // Si c'est l'origine d'un widget
+                      if (isWidgetOrigin && widget) {
+                        const config = WIDGET_LABELS[widget.type]
+                        const Icon = config.icon
+                        return (
+                          <div
+                            key={`${rowIndex}-${colIndex}`}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.effectAllowed = "move"
+                              setDraggingEditorWidget(widget.id)
+                              setEditingWidget(null)
+                            }}
+                            onDragEnd={() => setDraggingEditorWidget(null)}
+                            className={cn(
+                              "relative rounded-lg border-2 bg-card shadow-sm transition-all group",
+                              "hover:border-primary hover:shadow-md cursor-grab active:cursor-grabbing",
+                              editingWidget === widget.id && "border-primary ring-2 ring-primary/20",
+                              isBeingDragged && "opacity-30 scale-95"
+                            )}
+                            style={{
+                              gridColumn: `span ${widget.width}`,
+                              gridRow: `span ${widget.height}`,
+                            }}
+                            onClick={() => {
+                              if (!draggingEditorWidget) {
+                                setEditingWidget(widget.id)
+                                setEditWidgetType(widget.type)
+                              }
+                            }}
+                          >
+                            <div className="absolute inset-0 flex flex-col items-center justify-center p-2">
+                              <Icon className="size-6 text-primary mb-1" />
+                              <p className="text-xs font-medium text-center leading-tight">{config.label}</p>
+                              <p className="text-[10px] text-muted-foreground">{widget.width}×{widget.height}</p>
+                            </div>
+                            
+                            {/* Bouton supprimer */}
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              className="absolute -top-2 -right-2 size-6 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                removeWidgetFromGrid(widget.id)
+                              }}
+                            >
+                              <X className="size-3" />
+                            </Button>
+
+                            {/* Poignées de redimensionnement style épuré */}
+                            <>
+                              {/* Handle droite */}
+                              {widget.width > 1 || (widget.width < gridCols && widget.col! + widget.width < gridCols) ? (
+                                <div
+                                  className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 cursor-ew-resize bg-primary/0 hover:bg-primary/80 transition-all opacity-0 group-hover:opacity-100 z-20"
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation()
+                                    e.preventDefault()
+                                    handleResizeStart(e, widget.id, "right")
+                                  }}
+                                  title="Redimensionner"
+                                >
+                                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-primary rounded-full" />
+                                </div>
+                              ) : null}
+                              
+                              {/* Handle gauche */}
+                              {widget.width > 1 || (widget.width < gridCols && widget.col! > 0) ? (
+                                <div
+                                  className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 cursor-ew-resize bg-primary/0 hover:bg-primary/80 transition-all opacity-0 group-hover:opacity-100 z-20"
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation()
+                                    e.preventDefault()
+                                    handleResizeStart(e, widget.id, "left")
+                                  }}
+                                  title="Redimensionner"
+                                >
+                                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-primary rounded-full" />
+                                </div>
+                              ) : null}
+                              
+                              {/* Handle bas */}
+                              {widget.height > 1 || (widget.height < (editingMobileLayout ? 6 : 2) && widget.row! + widget.height < gridRows) ? (
+                                <div
+                                  className="absolute bottom-0 left-1/2 -translate-x-1/2 h-1 w-8 cursor-ns-resize bg-primary/0 hover:bg-primary/80 transition-all opacity-0 group-hover:opacity-100 z-20"
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation()
+                                    e.preventDefault()
+                                    handleResizeStart(e, widget.id, "bottom")
+                                  }}
+                                  title="Redimensionner"
+                                >
+                                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-6 bg-primary rounded-full" />
+                                </div>
+                              ) : null}
+                              
+                              {/* Handle haut */}
+                              {widget.height > 1 || (widget.height < (editingMobileLayout ? 6 : 2) && widget.row! > 0) ? (
+                                <div
+                                  className="absolute top-0 left-1/2 -translate-x-1/2 h-1 w-8 cursor-ns-resize bg-primary/0 hover:bg-primary/80 transition-all opacity-0 group-hover:opacity-100 z-20"
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation()
+                                    e.preventDefault()
+                                    handleResizeStart(e, widget.id, "top")
+                                  }}
+                                  title="Redimensionner"
+                                >
+                                  <div className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-6 bg-primary rounded-full" />
+                                </div>
+                              ) : null}
+                              
+                              {/* Handle coin bas-droite */}
+                              {(widget.width < gridCols && widget.col! + widget.width < gridCols) || (widget.height < (editingMobileLayout ? 6 : 2) && widget.row! + widget.height < gridRows) ? (
+                                <div
+                                  className="absolute bottom-0 right-0 w-3 h-3 cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation()
+                                    e.preventDefault()
+                                    handleResizeStart(e, widget.id, "corner")
+                                  }}
+                                  title="Redimensionner"
+                                >
+                                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-primary rounded-br" />
+                                </div>
+                              ) : null}
+                            </>
+                          </div>
+                        )
+                      }
+
+                      // Cellule vide
+                      return (
+                        <div
+                          key={`${rowIndex}-${colIndex}`}
+                          className={cn(
+                            "rounded-lg border-2 border-dashed transition-all flex items-center justify-center",
+                            "aspect-square w-full",
+                            // Quand on déplace un widget, montrer les zones valides/invalides
+                            isDragging && canDropHere && "bg-green-500/20 border-green-500 border-solid",
+                            isDragging && !canDropHere && widgetId && "bg-red-500/10 border-red-300",
+                            isDragging && !canDropHere && !widgetId && "bg-muted/30 border-muted-foreground/10",
+                            isDragging && canDropHere && isHovered && "bg-green-500/40 border-green-600 scale-105",
+                            // Mode normal (pas de drag)
+                            !isDragging && inSelection && "bg-primary/20 border-primary",
+                            !isDragging && !inSelection && isHovered && "bg-muted/50 border-muted-foreground/30",
+                            !isDragging && !inSelection && !isHovered && "border-muted-foreground/20"
+                          )}
+                          onMouseDown={() => !isDragging && handleGridCellMouseDown(rowIndex, colIndex)}
+                          onMouseEnter={() => handleGridCellMouseEnter(rowIndex, colIndex)}
+                          onDragOver={(e) => {
+                            e.preventDefault()
+                            setHoveredCell({ row: rowIndex, col: colIndex })
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault()
+                            handleDropOnGrid(rowIndex, colIndex)
+                          }}
+                        >
+                          {isDragging && canDropHere ? (
+                            <Plus className="size-5 text-green-600" />
+                          ) : !widgetId && !isDragging ? (
+                            <span className="text-[10px] text-muted-foreground/50">
+                              {rowIndex + 1},{colIndex + 1}
+                            </span>
+                          ) : null}
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+
+                {/* Légende */}
+                <div className="mt-2 sm:mt-4 flex flex-wrap gap-2 sm:gap-4 text-[10px] sm:text-xs text-muted-foreground justify-center">
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <div className="size-2 sm:size-3 rounded border-2 border-dashed border-muted-foreground/20" />
+                    <span>Vide</span>
+                  </div>
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <div className="size-2 sm:size-3 rounded bg-green-500/20 border-2 border-green-500" />
+                    <span>Disponible</span>
+                  </div>
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <div className="size-2 sm:size-3 rounded bg-card border-2 border-border" />
+                    <span>Widget</span>
+                  </div>
+                </div>
+                </div>
+              </div>
+
+              {/* Panneau de droite - Propriétés du widget sélectionné (desktop) */}
+              {editingWidget && (
+                <div className="hidden md:block w-48 lg:w-56 border-l bg-muted/30 p-3 lg:p-4 overflow-y-auto shrink-0">
+                  <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                    <Edit3 className="size-4" />
+                    Modifier le widget
+                  </h3>
+
+                  {(() => {
+                    const widget = editorWidgets.find(w => w.id === editingWidget)
+                    if (!widget) return null
+                    const config = WIDGET_LABELS[widget.type]
+                    const Icon = config.icon
+
+                    return (
+                      <div className="space-y-4">
+                        <div className="p-3 rounded-lg bg-background border">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Icon className="size-5 text-primary" />
+                            <p className="text-sm font-medium">{config.label}</p>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{config.description}</p>
+                          <div className="mt-2 text-xs">
+                            <Badge variant="outline">{widget.width}×{widget.height}</Badge>
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="text-xs font-medium mb-2">Changer le type</p>
+                          <Select
+                            value={widget.type}
+                            onValueChange={(value) => updateWidgetInGrid(editingWidget, value as WidgetType)}
+                          >
+                            <SelectTrigger className="text-xs h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(WIDGET_LABELS).map(([type, cfg]) => (
+                                <SelectItem key={type} value={type} className="text-xs">
+                                  {cfg.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => removeWidgetFromGrid(editingWidget)}
+                        >
+                          <Trash2 className="size-3 mr-2" />
+                          Supprimer
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => {
+                            setEditingWidget(null)
+                            setEditWidgetType(null)
+                          }}
+                        >
+                          Fermer
                         </Button>
                       </div>
                     )
-                  })}
+                  })()}
                 </div>
-              ))}
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-2 sm:p-4 border-t bg-muted/30 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 shrink-0">
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 sm:flex-none text-xs sm:text-sm"
+                  onClick={() => {
+                    const defaultWidgets: DashboardWidget[] = [
+                      { id: "1", type: "routine-progress", enabled: true, order: 0, width: 1, height: 1, row: 0, col: 0 },
+                      { id: "2", type: "missions-stats", enabled: true, order: 1, width: 1, height: 1, row: 0, col: 1 },
+                      { id: "3", type: "tasks-stats", enabled: true, order: 2, width: 1, height: 1, row: 0, col: 2 },
+                      { id: "4", type: "projects-stats", enabled: true, order: 3, width: 1, height: 1, row: 0, col: 3 },
+                      { id: "5", type: "routine-list", enabled: true, order: 4, width: 2, height: 1, row: 1, col: 0 },
+                      { id: "6", type: "today-missions", enabled: true, order: 5, width: 2, height: 1, row: 1, col: 2 },
+                      { id: "7", type: "week-missions", enabled: true, order: 6, width: 2, height: 1, row: 2, col: 0 },
+                      { id: "8", type: "active-projects", enabled: true, order: 7, width: 2, height: 1, row: 2, col: 2 },
+                    ]
+                    setCurrentEditorWidgets(defaultWidgets)
+                  }}
+                >
+                  <RotateCcw className="size-3 mr-1 sm:mr-2" />
+                  <span className="hidden xs:inline">Réinitialiser</span>
+                  <span className="xs:hidden">Reset</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 sm:flex-none text-xs sm:text-sm"
+                  onClick={() => setCurrentEditorWidgets([])}
+                >
+                  <Trash2 className="size-3 mr-1 sm:mr-2" />
+                  <span className="hidden xs:inline">Tout effacer</span>
+                  <span className="xs:hidden">Effacer</span>
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={closeGridEditor}>
+                  Annuler
+                </Button>
+                <Button size="sm" className="flex-1 sm:flex-none" onClick={applyGridChanges}>
+                  <CheckCircle2 className="size-3 sm:size-4 mr-1 sm:mr-2" />
+                  Appliquer
+                </Button>
+              </div>
             </div>
           </div>
-
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button onClick={() => setShowWidgetConfig(false)} className="w-full sm:w-auto">Terminé</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
