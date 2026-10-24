@@ -1,0 +1,16 @@
+# Caddy : HTTPS automatique (certificat Let's Encrypt obtenu et renouvelé tout seul) devant l'app.
+# DOMAIN et ACME_EMAIL viennent de .env.production (voir docker-compose.prod.yml).
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Les photos du scan de plats font quelques Mo au plus
+	request_body {
+		max_size 12MB
+	}
+
+	reverse_proxy app:3000
+}

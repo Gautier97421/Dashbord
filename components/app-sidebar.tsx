@@ -3,22 +3,7 @@
 import React from "react"
 import { signOut, useSession } from "next-auth/react"
 
-import {
-  LayoutDashboard,
-  Calendar,
-  Sun,
-  CheckSquare,
-  FolderKanban,
-  BarChart3,
-  Settings,
-  Zap,
-  Moon,
-  Dumbbell,
-  BedDouble,
-  LogOut,
-  StickyNote,
-  ChefHat,
-} from "lucide-react"
+import { Settings, LogOut } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -31,32 +16,24 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar"
+import { useNavPrefs } from "@/lib/nav-prefs"
+import { DynamicIcon } from "@/lib/icon-map"
+import { clearTravelOffline } from "@/lib/travel/offline"
 
-export type NavPage = "dashboard" | "calendar" | "routine" | "routine-night" | "missions" | "projects" | "sport" | "sleep" | "notes" | "cuisine" | "statistics" | "settings"
+export type NavPage = "dashboard" | "calendar" | "routine" | "routine-morning" | "routine-night" | "missions" | "projects" | "sport" | "nutrition" | "sleep" | "notes" | "cuisine" | "statistics" | "settings" | "ai-agent" | "applications" | "validation" | "subscriptions" | "budget" | "wishlist" | "travel"
 
-const navItems: { id: NavPage; label: string; icon: React.ElementType }[] = [
-  { id: "dashboard", label: "Tableau de bord", icon: LayoutDashboard },
-  { id: "calendar", label: "Calendrier", icon: Calendar },
-  { id: "routine", label: "Routine matinale", icon: Sun },
-  { id: "routine-night", label: "Routine du soir", icon: Moon },
-  { id: "missions", label: "Missions", icon: CheckSquare },
-  { id: "projects", label: "Projets", icon: FolderKanban },
-  { id: "sport", label: "Sport & Nutrition", icon: Dumbbell },
-  { id: "sleep", label: "Sommeil", icon: BedDouble },
-  { id: "notes", label: "Bloc-notes", icon: StickyNote },
-  { id: "cuisine", label: "Cuisine", icon: ChefHat },
-  { id: "statistics", label: "Statistiques", icon: BarChart3 },
-  { id: "settings", label: "Paramètres", icon: Settings },
-]
+// A page key is either a built-in NavPage or a "custom:<id>" string
+export type PageKey = NavPage | string
 
 interface AppSidebarProps {
-  currentPage: NavPage
-  onNavigate: (page: NavPage) => void
+  currentPage: PageKey
+  onNavigate: (page: PageKey) => void
 }
 
 export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
   const { data: session } = useSession()
   const userName = session?.user?.name || session?.user?.email?.split('@')[0] || "Utilisateur"
+  const { items } = useNavPrefs()
 
   return (
     <Sidebar>
@@ -64,7 +41,7 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
         <div className="flex items-center gap-2">
           <div className="flex items-center justify-center rounded-lg overflow-hidden w-16 h-16 shadow-md">
             <img
-              src="/perso_grain.png"
+              src="/images/perso_grain.png"
               alt="Perso"
               className="scale-535 object-cover"
             />
@@ -81,18 +58,30 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.id}>
+              {items.map((item) => (
+                <SidebarMenuItem key={item.key}>
                   <SidebarMenuButton
-                    isActive={currentPage === item.id}
-                    onClick={() => onNavigate(item.id)}
+                    isActive={currentPage === item.key || (item.key === "routine" && (currentPage === "routine-morning" || currentPage === "routine-night"))}
+                    onClick={() => onNavigate(item.key)}
                     tooltip={item.label}
                   >
-                    <item.icon className="size-4" />
+                    <DynamicIcon name={item.icon} className="size-4" />
                     <span>{item.label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+
+              {/* Settings pinned at the end */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={currentPage === "settings"}
+                  onClick={() => onNavigate("settings")}
+                  tooltip="Paramètres"
+                >
+                  <Settings className="size-4" />
+                  <span>Paramètres</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -102,7 +91,8 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              // Les voyages gardés hors connexion ne restent pas sur l'appareil
+              onClick={() => clearTravelOffline().finally(() => signOut({ callbackUrl: "/login" }))}
               tooltip="Se déconnecter"
               className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
             >

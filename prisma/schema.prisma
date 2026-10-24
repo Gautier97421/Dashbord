@@ -14,10 +14,18 @@ enum Priority {
   low
   medium
   high
+  urgent
 }
 
 enum TaskStatus {
   todo
+  in_progress
+  waiting
+  done
+}
+
+enum ProjectStatus {
+  not_started
   in_progress
   done
 }
@@ -118,14 +126,42 @@ enum WidgetType {
   project_progress
 }
 
+// AI Agent System Enums
+enum OAuthProvider {
+  gmail
+  outlook
+  spotify
+  youtube
+  linkedin
+  github
+  notion
+  discord
+  trello
+}
+
+enum AIActionStatus {
+  pending
+  approved
+  rejected
+  executed
+  failed
+}
+
+enum ActionLogStatus {
+  success
+  failed
+}
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  password  String
-  hasCompletedOnboarding Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  email                  String   @unique
+  name                   String?
+  // Pseudo unique (minuscules) pour être trouvé par ses amis
+  username               String?  @unique
+  password               String
+  hasCompletedOnboarding Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   // Relations
   routineActions      RoutineAction[]
@@ -147,20 +183,56 @@ model User {
   settings            UserSettings?
   notes               Note[]
   recipes             Recipe[]
+  oauthAccounts       OAuthAccount[]
+  aiSuggestions       AISuggestion[]
+  actionLogs          ActionLog[]
+  workflows           Workflow[]           @relation("UserWorkflows")
+  jobApplications     JobApplication[]
+  customPages         CustomPage[]
+  notifications       Notification[]
+  subscriptions       Subscription[]
+  agentConfig         AgentConfig?
+  watches             Watch[]
+  pendingActions      PendingAction[]
+  projectActivities   ProjectActivity[]
+  attachments         Attachment[]
+  projectTemplates    ProjectTemplate[]
+  savedViews          SavedView[]
+  pushSubscriptions   PushSubscription[]
+  sentAlerts          SentAlert[]
+  budgetSettings      BudgetSettings?
+  budgetCategories    BudgetCategory[]
+  budgetEntries       BudgetEntry[]
+  wishlistLists       WishlistList[]
+  wishlistItems       WishlistItem[]
+  trips               Trip[]
+  tripPlaces          TripPlace[]
+  tripActivities      TripActivity[]
+  tripBookings        TripBooking[]
+  tripExpenses        TripExpense[]
+  tripChecklist       TripChecklistItem[]
+  tripJournal         TripJournalEntry[]
+  tripMemberships     TripMember[]
+  travelDocuments     TravelDocument[]
+  tripDocumentLinks   TripDocumentLink[]
+  friendRequestsSent     Friendship[] @relation("FriendshipRequester")
+  friendRequestsReceived Friendship[] @relation("FriendshipAddressee")
 
   @@map("users")
 }
 
 model UserSettings {
-  id                String  @id @default(cuid())
-  userId            String  @unique
-  theme             Theme   @default(system)
-  dayStartHour      Int     @default(6)
-  dayEndHour        Int     @default(22)
-  showRoutines      Boolean @default(true)
-  showStats         Boolean @default(true)
-  showDailyInsight  Boolean @default(true)
-  
+  id               String  @id @default(cuid())
+  userId           String  @unique
+  theme            Theme   @default(system)
+  dayStartHour     Int     @default(6)
+  dayEndHour       Int     @default(22)
+  showRoutines     Boolean @default(true)
+  showStats        Boolean @default(true)
+  showDailyInsight Boolean @default(true)
+  // Alertes des projets : { enabled, push, kinds: { task_overdue: true, … }, timeZone }
+  alertPrefs       Json?
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_settings")
@@ -176,7 +248,8 @@ model Note {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments Attachment[]
 
   @@index([userId])
   @@index([pinned])
@@ -188,42 +261,58 @@ model Recipe {
   userId      String
   name        String
   description String?  @db.Text
-  ingredients Json     // Array of {name, quantity, unit}
-  protein     Float?   // grammes
-  carbs       Float?   // grammes
-  fat         Float?   // grammes
-  calories    Float?   // kcal
-  prepTime    Int?     // minutes
-  cookTime    Int?     // minutes
-  servings    Int?     // nombre de parts
-  category    String?  // entrée, plat, dessert, etc.
+  ingredients Json // Array of {name, quantity, unit}
+  protein     Float? // grammes
+  carbs       Float? // grammes
+  fat         Float? // grammes
+  calories    Float? // kcal
+  prepTime    Int? // minutes
+  cookTime    Int? // minutes
+  servings    Int? // nombre de parts
+  category    String? // entrée, plat, dessert, etc.
   imageUrl    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meals Meal[]
 
   @@index([userId])
   @@index([category])
   @@map("recipes")
 }
 
+model Ingredient {
+  id       String @id @default(cuid())
+  name     String
+  category String // viande, poisson, feculent, legume, fruit, laitage, matiere_grasse, boisson, autre
+  unit     String @default("g") // unité de référence pour les macros (g ou ml)
+  calories Float // pour 100g/100ml
+  protein  Float // pour 100g/100ml
+  carbs    Float // pour 100g/100ml
+  fat      Float // pour 100g/100ml
+
+  @@index([name])
+  @@index([category])
+  @@map("ingredients")
+}
+
 model RoutineAction {
-  id         String           @id @default(cuid())
+  id         String          @id @default(cuid())
   userId     String
   name       String
   category   RoutineCategory
   importance Priority
-  createdAt  DateTime         @default(now())
+  createdAt  DateTime        @default(now())
 
-  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   logs RoutineLog[]
 
   @@map("routine_actions")
 }
 
 model RoutineLog {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   userId    String
   actionId  String
   date      String
@@ -250,7 +339,7 @@ model NightRoutineAction {
 }
 
 model NightRoutineLog {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   userId    String
   actionId  String
   date      String
@@ -264,27 +353,48 @@ model NightRoutineLog {
 }
 
 model Task {
-  id          String      @id @default(cuid())
-  userId      String
-  title       String
-  description String?
-  priority    Priority
-  status      TaskStatus
-  dueDate     String?
-  missionId   String?
-  projectId   String?
-  createdAt   DateTime    @default(now())
-  completedAt String?
+  id             String             @id @default(cuid())
+  userId         String
+  title          String
+  description    String?
+  priority       Priority
+  status         TaskStatus
+  dueDate        String?
+  missionId      String?
+  projectId      String?
+  createdAt      DateTime           @default(now())
+  completedAt    String?
+  updatedAt      DateTime           @default(now()) @updatedAt
+  startDate      String?
+  // Notes libres, plus longues que la description
+  notes          String?            @db.Text
+  // Sous-tâches / checklist : [{ id, text, done }]
+  checklist      Json               @default("[]")
+  // Ressources : [{ id, label, url }]
+  links          Json               @default("[]")
+  // Tâches à terminer avant celle-ci (ids, même utilisateur)
+  dependsOn      String[]           @default([])
+  // Une tâche récurrente terminée recrée la suivante, échéance décalée d'une période
+  recurrence     RecurrencePattern?
+  // Position dans sa colonne Kanban et dans la liste du projet
+  order          Int                @default(0)
+  // Affichée aussi dans le calendrier principal (à son échéance)
+  showInCalendar Boolean            @default(false)
+  // Corbeille : la tâche est masquée, restaurable 30 jours
+  deletedAt      DateTime?
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mission Mission? @relation(fields: [missionId], references: [id], onDelete: SetNull)
-  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mission     Mission?          @relation(fields: [missionId], references: [id], onDelete: SetNull)
+  project     Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  activities  ProjectActivity[]
+  attachments Attachment[]
 
+  @@index([userId, deletedAt])
   @@map("tasks")
 }
 
 model Mission {
-  id          String      @id @default(cuid())
+  id          String     @id @default(cuid())
   userId      String
   title       String
   description String?
@@ -292,7 +402,7 @@ model Mission {
   priority    Priority
   status      TaskStatus
   dueDate     String?
-  createdAt   DateTime    @default(now())
+  createdAt   DateTime   @default(now())
   completedAt String?
 
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -303,36 +413,179 @@ model Mission {
 }
 
 model Project {
-  id          String   @id @default(cuid())
-  userId      String
-  title       String
-  description String?
-  objectives  String[]
-  deadline    String?
-  createdAt   DateTime @default(now())
-  completedAt String?
+  id             String         @id @default(cuid())
+  userId         String
+  title          String
+  description    String?
+  objectives     String[]
+  deadline       String?
+  createdAt      DateTime       @default(now())
+  completedAt    String?
+  // État choisi à la main, indépendant des tâches (un projet peut n'en avoir aucune) ; null = pas d'état affiché
+  status         ProjectStatus?
+  // Projet parent (null = projet racine) : permet d'imbriquer des sous-projets sur plusieurs niveaux
+  parentId       String?
+  // Liens du projet : [{ id, label, url }] (dossier local, app, documentation…)
+  links          Json           @default("[]")
+  updatedAt      DateTime       @default(now()) @updatedAt
+  notes          String?        @db.Text
+  priority       Priority?
+  startDate      String?
+  // Catégorie libre (Perso, Travail, Client…) pour filtrer
+  category       String?
+  favorite       Boolean        @default(false)
+  // Position parmi les projets du même parent
+  order          Int            @default(0)
+  // Échéance affichée aussi dans le calendrier principal
+  showInCalendar Boolean        @default(false)
+  // Corbeille : le projet, ses sous-projets et leurs tâches reçoivent la même date, et sont restaurés ensemble
+  deletedAt      DateTime?
 
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent         Project?          @relation("ProjectChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children       Project[]         @relation("ProjectChildren")
   tasks          Task[]
   calendarEvents CalendarEvent[]
+  activities     ProjectActivity[]
+  attachments    Attachment[]
 
+  @@index([parentId])
+  @@index([userId, deletedAt])
   @@map("projects")
 }
 
+// Commentaires et historique des modifications d'un projet ou d'une tâche
+model ProjectActivity {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String?
+  taskId    String?
+  // "comment" (écrit par l'utilisateur) ou "event" (modification enregistrée automatiquement)
+  kind      String
+  message   String   @db.Text
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task    Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([projectId])
+  @@index([taskId])
+  @@map("project_activities")
+}
+
+// Fichier joint à un projet, une tâche ou une note, stocké sur le disque du serveur (UPLOAD_DIR)
+model Attachment {
+  id         String   @id @default(cuid())
+  userId     String
+  projectId  String?
+  taskId     String?
+  // Image insérée dans une note du bloc-notes
+  noteId     String?
+  // Document d'un voyage ; tripItemId : réservation, dépense ou page du carnet concernée
+  tripId     String?
+  tripItemId String?
+  // Fichier d'un document de la bibliothèque (passeport, assurance…)
+  travelDocId String?
+  name       String
+  mimeType   String
+  size       Int
+  // Nom du fichier sur le disque (jamais le nom d'origine, pour éviter tout chemin forgé)
+  storageKey String   @unique
+  createdAt  DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task    Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  note    Note?    @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  trip    Trip?    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  travelDoc TravelDocument? @relation(fields: [travelDocId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([travelDocId])
+  @@index([tripId])
+  @@index([taskId])
+  @@index([noteId])
+  @@map("attachments")
+}
+
+// Modèle de projet créé par l'utilisateur (les modèles fournis sont dans lib/project-templates.ts)
+model ProjectTemplate {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  // { project: {...}, children: [...], tasks: [{ title, priority, offsetDays, checklist }] }
+  data        Json
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("project_templates")
+}
+
+// Vue enregistrée (filtres + tri) de la liste des projets ou de "Mes tâches"
+model SavedView {
+  id        String   @id @default(cuid())
+  userId    String
+  // "projects" ou "tasks"
+  scope     String
+  name      String
+  filters   Json
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, scope])
+  @@map("saved_views")
+}
+
+// Abonnement aux notifications push d'un appareil (PWA installée ou navigateur)
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+// Alertes projets déjà envoyées : effacer ses notifications ne doit pas les faire revenir
+model SentAlert {
+  id        String   @id @default(cuid())
+  userId    String
+  dedupeKey String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([createdAt])
+  @@map("sent_alerts")
+}
+
 model CalendarEvent {
-  id                String              @id @default(cuid())
+  id                String             @id @default(cuid())
   userId            String
   title             String
   date              String
   startTime         String?
   endTime           String?
   priority          Priority
-  isRecurring       Boolean             @default(false)
+  isRecurring       Boolean            @default(false)
   recurrencePattern RecurrencePattern?
   missionId         String?
   projectId         String?
-  completed         Boolean             @default(false)
-  createdAt         DateTime            @default(now())
+  completed         Boolean            @default(false)
+  createdAt         DateTime           @default(now())
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   mission Mission? @relation(fields: [missionId], references: [id], onDelete: SetNull)
@@ -355,7 +608,7 @@ model DailyInsight {
 }
 
 model SleepLog {
-  id       String @id @default(cuid())
+  id       String  @id @default(cuid())
   userId   String
   date     String
   bedTime  String
@@ -371,7 +624,7 @@ model SleepLog {
 }
 
 model WorkoutSession {
-  id         String            @id @default(cuid())
+  id         String           @id @default(cuid())
   userId     String
   date       String
   type       ActivityType
@@ -379,7 +632,7 @@ model WorkoutSession {
   duration   Int
   notes      String?
   intensity  WorkoutIntensity
-  completed  Boolean           @default(false)
+  completed  Boolean          @default(false)
   programId  String?
   missionId  String?
 
@@ -390,15 +643,15 @@ model WorkoutSession {
 }
 
 model WorkoutProgram {
-  id                  String                   @id @default(cuid())
-  userId              String
-  name                String
-  description         String?
-  active              Boolean                  @default(true)
-  autoCreateMissions  Boolean                  @default(false)
-  createdAt           DateTime                 @default(now())
+  id                 String   @id @default(cuid())
+  userId             String
+  name               String
+  description        String?
+  active             Boolean  @default(true)
+  autoCreateMissions Boolean  @default(false)
+  createdAt          DateTime @default(now())
 
-  user     User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessions WorkoutProgramSession[]
   workouts WorkoutSession[]
 
@@ -406,7 +659,7 @@ model WorkoutProgram {
 }
 
 model WorkoutProgramSession {
-  id         String            @id @default(cuid())
+  id         String           @id @default(cuid())
   programId  String
   dayOfWeek  Int
   type       ActivityType
@@ -422,13 +675,13 @@ model WorkoutProgramSession {
 }
 
 model PersonalRecord {
-  id       String   @id @default(cuid())
-  userId   String
-  exercise String
-  value    Float
-  reps     Int?
-  unit     String
-  date     String
+  id        String   @id @default(cuid())
+  userId    String
+  exercise  String
+  value     Float
+  reps      Int?
+  unit      String
+  date      String
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -437,15 +690,20 @@ model PersonalRecord {
 }
 
 model FitnessProfile {
-  id            String        @id @default(cuid())
-  userId        String        @unique
-  age           Int
-  weight        Float
-  height        Float
-  gender        Gender
-  goal          FitnessGoal
-  activityLevel ActivityLevel
-  targetWeight  Float?
+  id             String        @id @default(cuid())
+  userId         String        @unique
+  age            Int
+  weight         Float
+  height         Float
+  gender         Gender
+  goal           FitnessGoal
+  activityLevel  ActivityLevel
+  targetWeight   Float?
+  // Objectifs nutritionnels personnalisés : si renseignés, priment sur le calcul automatique
+  customCalories Int?
+  customProtein  Float?
+  customCarbs    Float?
+  customFats     Float?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -469,16 +727,18 @@ model DailyNutrition {
 }
 
 model Meal {
-  id              String @id @default(cuid())
+  id               String  @id @default(cuid())
   dailyNutritionId String
-  name            String
-  time            String
-  calories        Int
-  protein         Float
-  carbs           Float
-  fats            Float
+  recipeId         String?
+  name             String
+  time             String
+  calories         Int
+  protein          Float
+  carbs            Float
+  fats             Float
 
   dailyNutrition DailyNutrition @relation(fields: [dailyNutritionId], references: [id], onDelete: Cascade)
+  recipe         Recipe?        @relation(fields: [recipeId], references: [id], onDelete: SetNull)
 
   @@map("meals")
 }
@@ -491,8 +751,783 @@ model DashboardWidget {
   order   Int
   width   Int
   height  Int
+  row     Int?
+  col     Int?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("dashboard_widgets")
+}
+
+// AI Workflow Builder Models
+enum WorkflowNodeType {
+  trigger
+  logic
+  action
+}
+
+enum WorkflowTriggerType {
+  manual
+  email_received
+  calendar_event
+  scheduled
+}
+
+enum WorkflowLogicType {
+  filter
+  if_then
+  delay
+  transform
+}
+
+enum WorkflowActionType {
+  gmail_read
+  gmail_send
+  gmail_label
+  gmail_move
+  gmail_delete
+}
+
+enum WorkflowStatus {
+  draft
+  active
+  inactive
+  error
+}
+
+enum WorkflowExecutionStatus {
+  pending
+  running
+  success
+  failed
+  partial
+}
+
+model Workflow {
+  id          String         @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  status      WorkflowStatus @default(draft)
+  isActive    Boolean        @default(false)
+  config      Json // Stores the entire workflow structure (nodes, edges)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user       User                @relation("UserWorkflows", fields: [userId], references: [id], onDelete: Cascade)
+  nodes      WorkflowNode[]
+  executions WorkflowExecution[]
+
+  @@index([userId])
+  @@map("workflows")
+}
+
+model WorkflowNode {
+  id         String           @id @default(cuid())
+  workflowId String
+  nodeId     String // React Flow node ID
+  type       WorkflowNodeType
+  label      String
+  config     Json // Node specific configuration
+  position   Json // X, Y coordinates
+  data       Json // Node data (parameters, etc)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, nodeId])
+  @@index([workflowId])
+  @@map("workflow_nodes")
+}
+
+model WorkflowEdge {
+  id           String   @id @default(cuid())
+  workflowId   String
+  source       String // Source node ID
+  target       String // Target node ID
+  sourceHandle String?
+  targetHandle String?
+  createdAt    DateTime @default(now())
+
+  @@unique([workflowId, source, target])
+  @@map("workflow_edges")
+}
+
+model WorkflowExecution {
+  id          String                  @id @default(cuid())
+  workflowId  String
+  status      WorkflowExecutionStatus @default(pending)
+  input       Json? // Initial trigger data
+  output      Json? // Final result
+  error       String?
+  logs        Json[] // Array of step-by-step logs
+  executedAt  DateTime                @default(now())
+  completedAt DateTime?
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@index([status])
+  @@map("workflow_executions")
+}
+
+// AI Agent System Models
+
+model OAuthAccount {
+  id              String        @id @default(cuid())
+  userId          String
+  provider        OAuthProvider
+  providerUserId  String
+  accessToken     String        @db.Text // Encrypted
+  refreshToken    String?       @db.Text // Encrypted, nullable if not provided
+  expiresAt       DateTime?
+  historyId       String? // Gmail history cursor for incremental push (watch)
+  watchExpiration DateTime? // When the Gmail watch subscription expires
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("oauth_accounts")
+}
+
+enum ApplicationStatus {
+  applied
+  acknowledged
+  interview
+  offer
+  rejected
+  ghosted
+}
+
+model JobApplication {
+  id            String            @id @default(cuid())
+  userId        String
+  company       String
+  position      String?
+  status        ApplicationStatus @default(applied)
+  appliedAt     DateTime          @default(now())
+  lastUpdate    DateTime          @default(now())
+  source        String? // e.g. "email", "manual"
+  sourceEmailId String? // Gmail message id that created this entry
+  notes         String?           @db.Text
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("job_applications")
+}
+
+// ── Autonomous AI agent ───────────────────────────────────────────────────
+
+enum NotificationType {
+  info
+  subscription
+  cancellation
+  price_increase
+  trial_ending
+  application
+  important
+  agent
+  project
+  task
+  wishlist
+  trip
+  social
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType @default(info)
+  title     String
+  body      String?          @db.Text
+  link      String? // app page key e.g. "ai-agent"
+  read      Boolean          @default(false)
+  dedupeKey String? // prevents duplicate notifications across agent runs
+  meta      Json?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+enum SubscriptionStatus {
+  active
+  trial
+  cancelled
+  unknown
+}
+
+model Subscription {
+  id              String                 @id @default(cuid())
+  userId          String
+  service         String
+  status          SubscriptionStatus     @default(active)
+  amount          String?
+  // "manual" = prix saisi à la main (jamais écrasé par un scan), "email" = lu dans un mail ou une facture
+  amountSource    String?
+  nextBillingDate DateTime?
+  frequency       SubscriptionFrequency?
+  notes           String?
+  lastAction      String? // new | renewal | payment | cancellation | trial_ending | price_increase
+  // Mail qui justifie le statut actuel (dernier paiement, résiliation…)
+  lastEmailId     String?
+  // Mail (ou facture jointe) d'où vient le prix
+  invoiceEmailId  String?
+  // Dernière modification à la main depuis la page Abonnements (null = jamais touché)
+  editedAt        DateTime?
+  // Abonnement détecté supprimé par l'utilisateur : masqué, et jamais recréé par un scan
+  dismissedAt     DateTime?
+  detectedAt      DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, service])
+  @@index([userId])
+  @@map("subscriptions")
+}
+
+enum SubscriptionFrequency {
+  weekly
+  monthly
+  yearly
+  other
+}
+
+model AgentConfig {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  enabled             Boolean   @default(false)
+  sortSubscriptions   Boolean   @default(true)
+  detectCancellations Boolean   @default(true)
+  notifyImportant     Boolean   @default(true)
+  trackApplications   Boolean   @default(true)
+  forwardToDiscord    Boolean   @default(false)
+  discordWebhookUrl   String?   @db.Text
+  // When true (default), AI/automations NEVER do irreversible actions (send,
+  // delete, external writes). They queue them in "À valider" for approval.
+  safeMode            Boolean   @default(true)
+  // User-defined sorting/importance rules (array of { id, field, op, value, action, label })
+  rules               Json      @default("[]")
+  lastRunAt           DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("agent_configs")
+}
+
+enum PendingActionStatus {
+  pending
+  approved
+  rejected
+  executed
+  failed
+}
+
+// An irreversible action staged by safe mode, awaiting the user's approval.
+model PendingAction {
+  id         String              @id @default(cuid())
+  userId     String
+  kind       String // gmail_send | gmail_delete | discord_send | notion_create | http_request
+  summary    String              @db.Text
+  params     Json
+  status     PendingActionStatus @default(pending)
+  workflowId String?
+  error      String?             @db.Text
+  createdAt  DateTime            @default(now())
+  executedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("pending_actions")
+}
+
+enum WatchType {
+  restock
+  price
+}
+
+enum WatchStatus {
+  watching
+  triggered
+}
+
+// A product/page the agent watches for restock or price drops.
+model Watch {
+  id          String      @id @default(cuid())
+  userId      String
+  label       String
+  url         String      @db.Text
+  type        WatchType   @default(restock)
+  targetPrice Float?
+  status      WatchStatus @default(watching)
+  lastStatus  String?
+  lastChecked DateTime?
+  createdAt   DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("watches")
+}
+
+// User-created custom pages (flexible block-based content)
+model CustomPage {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  icon      String   @default("Sparkles") // lucide icon name
+  color     String?  @default("#6366f1")
+  order     Int      @default(0)
+  blocks    Json     @default("[]") // array of blocks { id, type, title, items[], text }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("custom_pages")
+}
+
+model AISuggestion {
+  id           String         @id @default(cuid())
+  userId       String
+  requestText  String         @db.Text
+  tool         String // e.g., "gmail.labelEmails"
+  params       Json // Tool parameters
+  status       AIActionStatus @default(pending)
+  result       Json? // Execution result if executed
+  errorMessage String? // Error message if failed
+  createdAt    DateTime       @default(now())
+  confirmedAt  DateTime?
+  executedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("ai_suggestions")
+}
+
+model ActionLog {
+  id           String          @id @default(cuid())
+  userId       String
+  actionType   String // e.g., "gmail.labelEmails", "gmail.moveEmails"
+  status       ActionLogStatus
+  input        Json // Input parameters
+  output       Json? // Result/output
+  errorMessage String? // Error details if failed
+  createdAt    DateTime        @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([actionType])
+  @@index([status])
+  @@index([createdAt])
+  @@map("action_logs")
+}
+
+// Fonctionnalités activables par l'administrateur (voir lib/feature-defs.ts)
+model FeatureFlag {
+  key       String   @id
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  @@map("feature_flags")
+}
+
+// Budget : réglages (un par utilisateur)
+model BudgetSettings {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  // "monthly" ou "weekly"
+  period               String   @default("monthly")
+  // Budget total par période ; null = somme des plafonds des catégories
+  amount               Float?
+  // Les abonnements actifs (page Abonnements) comptent dans les dépenses de chaque période
+  includeSubscriptions Boolean  @default(true)
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("budget_settings")
+}
+
+// Catégorie de dépenses (Courses, Loisirs…) avec un plafond par période
+model BudgetCategory {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  // Plafond par période (mois ou semaine selon les réglages) ; null = sans plafond
+  limitAmount Float?
+  color       String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries BudgetEntry[]
+
+  @@index([userId])
+  @@map("budget_categories")
+}
+
+// Dépense ou revenu
+model BudgetEntry {
+  id         String   @id @default(cuid())
+  userId     String
+  categoryId String?
+  // "expense" (dépense) ou "income" (revenu)
+  kind       String   @default("expense")
+  label      String
+  amount     Float
+  // Jour AAAA-MM-JJ
+  date       String
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category BudgetCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([userId, date])
+  @@map("budget_entries")
+}
+
+// ─── Wishlist ───────────────────────────────────────────────────────────────
+
+model WishlistList {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items WishlistItem[]
+
+  @@index([userId])
+  @@map("wishlist_lists")
+}
+
+model WishlistItem {
+  id            String    @id @default(cuid())
+  userId        String
+  // null = « Sans liste »
+  listId        String?
+  title         String
+  url           String?   @db.Text
+  imageUrl      String?   @db.Text
+  store         String?
+  price         Float?
+  currency      String    @default("EUR")
+  quantity      Int       @default(1)
+  notes         String?   @db.Text
+  promoCode     String?
+  // Autres boutiques : [{ id, url, store, price, currency, checkedAt, error }]
+  offers        Json?
+  // Relevés du lien principal : [{ date, price }]
+  priceHistory  Json?
+  lastCheckedAt DateTime?
+  checkError    String?
+  purchased     Boolean   @default(false)
+  purchasedAt   DateTime?
+  order         Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  list WishlistList? @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([listId])
+  @@map("wishlist_items")
+}
+
+// ─── Voyages ────────────────────────────────────────────────────────────────
+// Jours au format AAAA-MM-JJ et heures locales "AAAA-MM-JJTHH:mm" (heure du lieu, sans fuseau)
+
+model Trip {
+  id              String   @id @default(cuid())
+  userId          String
+  title           String
+  destination     String
+  startDate       String
+  endDate         String
+  // Hors de France : formalités, devises, consulat…
+  abroad          Boolean  @default(false)
+  cancelled       Boolean  @default(false)
+  archived        Boolean  @default(false)
+  // Devise du budget ; les dépenses dans une autre devise sont converties avec leur taux
+  currency        String   @default("EUR")
+  budget          Float?
+  // { catégorie: montant }
+  categoryBudgets Json?
+  // [{ id, name }]
+  travelers       Json?
+  // Contacts utiles : [{ id, name, kind, phone, note }]
+  contacts        Json?
+  // Destinations dans l'ordre (plusieurs pour un road trip) : [{ id, name, lat, lng, startDate?, endDate? }]
+  stops           Json?
+  // Le créateur montre tous ses documents liés au voyage aux membres
+  ownerShareDocs  Boolean  @default(false)
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  places      TripPlace[]
+  activities  TripActivity[]
+  bookings    TripBooking[]
+  expenses    TripExpense[]
+  checklist   TripChecklistItem[]
+  journal     TripJournalEntry[]
+  attachments Attachment[]
+  members       TripMember[]
+  documentLinks TripDocumentLink[]
+
+  @@index([userId])
+  @@map("trips")
+}
+
+model TripPlace {
+  id        String   @id @default(cuid())
+  userId    String
+  tripId    String
+  name      String
+  // lodging, restaurant, visit, station, airport, parking, activity, other
+  kind      String   @default("visit")
+  // todo (à visiter), booked (réservé), visited (visité)
+  status    String   @default("todo")
+  address   String?
+  url       String?  @db.Text
+  lat       Float?
+  lng       Float?
+  day       String?
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@map("trip_places")
+}
+
+model TripActivity {
+  id            String   @id @default(cuid())
+  userId        String
+  tripId        String
+  day           String
+  startTime     String?
+  endTime       String?
+  title         String
+  // activity, visit, restaurant, transport, poi, rest, other
+  kind          String   @default("activity")
+  placeId       String?
+  address       String?
+  // Trajet depuis l'étape précédente, en minutes
+  travelMinutes Int?
+  bookingId     String?
+  notes         String?  @db.Text
+  // Alternative en cas de pluie
+  rainPlan      String?  @db.Text
+  done          Boolean  @default(false)
+  order         Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@map("trip_activities")
+}
+
+model TripBooking {
+  id        String   @id @default(cuid())
+  userId    String
+  tripId    String
+  // flight, train, bus, ferry, lodging, rental, car, transfer, parking, ticket, excursion, activity, other
+  type      String
+  // todo (à réserver), booked (réservé), confirmed (confirmé), cancelled (annulé)
+  status    String   @default("todo")
+  title     String
+  provider  String?
+  reference String?
+  startAt   String?
+  endAt     String?
+  fromPlace String?
+  toPlace   String?
+  address   String?
+  url       String?  @db.Text
+  phone     String?
+  // Dans la devise du voyage
+  cost      Float?
+  paid      Boolean  @default(false)
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@map("trip_bookings")
+}
+
+model TripExpense {
+  id            String   @id @default(cuid())
+  userId        String
+  tripId        String
+  date          String
+  label         String
+  // transport, local_transport, lodging, food, groceries, activities, car, insurance, fees, shopping, other
+  category      String   @default("other")
+  amount        Float
+  currency      String   @default("EUR")
+  // 1 unité de la devise = rate unités de la devise du voyage
+  rate          Float    @default(1)
+  // Frais bancaires, dans la devise du voyage
+  fees          Float    @default(0)
+  // planned (prévu), booked (réservé), paid (payé)
+  status        String   @default("paid")
+  paymentMethod String?
+  // Voyageur qui a payé, et ceux qui partagent la dépense (vide = tous)
+  paidBy        String?
+  splitWith     Json?
+  bookingId     String?
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@map("trip_expenses")
+}
+
+model TripChecklistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  tripId    String
+  // documents, visa, health, luggage, tech, home, checkin, other
+  category  String   @default("other")
+  title     String
+  done      Boolean  @default(false)
+  dueDate   String?
+  // Voyageur responsable
+  assignee  String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@map("trip_checklist")
+}
+
+model TripJournalEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  tripId    String
+  date      String
+  title     String?
+  text      String   @db.Text
+  placeId   String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@map("trip_journal")
+}
+
+// Voyage partagé : les membres voient et modifient le voyage comme son créateur (sauf partage et suppression)
+model TripMember {
+  id        String   @id @default(cuid())
+  tripId    String
+  userId    String
+  addedById String
+  // Ce membre montre tous ses documents liés au voyage aux autres
+  shareDocs Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, userId])
+  @@index([userId])
+  @@map("trip_members")
+}
+
+// Bibliothèque personnelle de documents de voyage, réutilisables d'un voyage à l'autre
+model TravelDocument {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  // identity, passport, visa, insurance, health, driving, card, other
+  category  String    @default("other")
+  number    String?
+  holder    String?
+  issuedAt  String?
+  expiresAt String?
+  notes     String?   @db.Text
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments Attachment[]
+  links       TripDocumentLink[]
+
+  @@index([userId])
+  @@map("travel_documents")
+}
+
+// Document de la bibliothèque utilisé pour un voyage ; privé sauf si `shared` (visible des membres)
+model TripDocumentLink {
+  id         String   @id @default(cuid())
+  tripId     String
+  documentId String
+  userId     String
+  shared     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  trip     Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  document TravelDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, documentId])
+  @@index([documentId])
+  @@map("trip_document_links")
+}
+
+// Demande d'ami ; acceptée, elle permet de partager des voyages
+model Friendship {
+  id          String    @id @default(cuid())
+  requesterId String
+  addresseeId String
+  // pending, accepted
+  status      String    @default("pending")
+  createdAt   DateTime  @default(now())
+  respondedAt DateTime?
+
+  requester User @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId])
+  @@map("friendships")
 }

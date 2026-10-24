@@ -57,6 +57,8 @@ export async function PUT(request: Request) {
         order: widget.order,
         width: widget.width,
         height: widget.height,
+        row: widget.row,
+        col: widget.col,
       })),
     })
 

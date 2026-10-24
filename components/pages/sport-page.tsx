@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useApp } from "@/lib/store-api"
-import { generateId, getToday } from "@/lib/helpers"
+import { generateId, getToday, toLocalDateString } from "@/lib/helpers"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -16,24 +16,38 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger} from "@/components/ui/dropdown-menu"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { MonthCalendar, MonthNav, monthLabel, shiftMonth } from "@/components/month-calendar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Dumbbell, Plus, Trash2, TrendingUp, Apple, Trophy, User, Calendar as CalendarIcon, Droplets, Moon, Calendar, Clock, CheckCircle2 } from "lucide-react"
-import type { WorkoutSession, PersonalRecord, FitnessProfile, DailyNutrition, Meal, ActivityType, FitnessGoal, WorkoutProgram, WorkoutProgramSession, Mission, TimeFrame, Priority, TaskStatus, MealPreset } from "@/lib/types"
+import { Dumbbell, Plus, Trash2, TrendingUp, Trophy, User, Calendar as CalendarIcon, Droplets, Moon, Calendar, Clock, CheckCircle2, Pencil } from "lucide-react"
+import type { WorkoutSession, PersonalRecord, FitnessProfile, ActivityType, FitnessGoal, WorkoutProgram, WorkoutProgramSession, Mission, TimeFrame, Priority, TaskStatus } from "@/lib/types"
+import { goalLabels, getEffectiveMacros, hasCustomMacros as hasCustomMacrosFor } from "@/lib/nutrition"
+import { Lottie } from "@/components/lottie"
 
 // Ordre des jours : Lundi à Dimanche (dimanche en dernier)
 const DAYS_ORDER = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 const DAYS_VALUES = [1, 2, 3, 4, 5, 6, 0] // dayOfWeek correspondant (dimanche = 0 en dernier)
 const DAYS_FULL = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+// Nombre de semaines générées automatiquement lorsqu'on réactive un programme
+const DEFAULT_AUTO_APPLY_WEEKS = 4
 
 
 export function SportPage() {
-  const { state, dispatch, updateFitnessProfile, addWorkoutProgram, updateWorkoutProgram, deleteWorkoutProgram, addMission } = useApp()
+  const {
+    state,
+    dispatch,
+    updateFitnessProfile,
+    addWorkoutProgram,
+    updateWorkoutProgram,
+    deleteWorkoutProgram,
+    addMission,
+    addWorkout: persistAddWorkout,
+    updateWorkout: persistUpdateWorkout,
+    deleteWorkout: persistDeleteWorkout,
+  } = useApp()
   const [activeTab, setActiveTab] = useState("workouts")
   const [showWorkoutForm, setShowWorkoutForm] = useState(false)
   const [showPRForm, setShowPRForm] = useState(false)
-  const [showMealForm, setShowMealForm] = useState(false)
-  const [editingMeal, setEditingMeal] = useState<Meal | null>(null)
   const [showProfileForm, setShowProfileForm] = useState(!state.fitnessProfile)
   const [showProgramForm, setShowProgramForm] = useState(false)
   const [editingWorkout, setEditingWorkout] = useState<WorkoutSession | null>(null)
@@ -41,45 +55,12 @@ export function SportPage() {
   const [selectedProgramId, setSelectedProgramId] = useState<string | null>(null)
   const [applyWeeks, setApplyWeeks] = useState(4)
   const [selectedDate, setSelectedDate] = useState(getToday())
-  const [nutritionView, setNutritionView] = useState<"today" | "history">("today")
-  const [nutritionMonth, setNutritionMonth] = useState(getToday().slice(0, 7)) // YYYY-MM
-  const [showPresetForm, setShowPresetForm] = useState(false)
-  const [editingPreset, setEditingPreset] = useState<MealPreset | null>(null)
-  
+
   const isMobile = useIsMobile();
 
   // useEffect(() => {
   //   setIsMobile(window.innerWidth < 900); // breakpoint sm
   // }, []);
-  
-  // Meal presets stockés localement (pourrait être persisté plus tard)
-  const [mealPresets, setMealPresets] = useState<MealPreset[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('mealPresets')
-      if (saved) return JSON.parse(saved)
-    }
-    return [
-      { id: "1", name: "Petit-déj", category: "breakfast", calories: 450, protein: 20, carbs: 50, fats: 18 },
-      { id: "2", name: "Déjeuner", category: "lunch", calories: 600, protein: 35, carbs: 55, fats: 22 },
-      { id: "3", name: "Dîner", category: "dinner", calories: 500, protein: 30, carbs: 40, fats: 20 },
-    ]
-  })
-  
-  const [newPreset, setNewPreset] = useState<Partial<MealPreset>>({
-    name: "",
-    category: "breakfast",
-    calories: 0,
-    protein: 0,
-    carbs: 0,
-    fats: 0,
-  })
-
-  // Sauvegarder les presets dans localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('mealPresets', JSON.stringify(mealPresets))
-    }
-  }, [mealPresets])
 
   // Nettoyer automatiquement les entraînements passés non complétés
   useEffect(() => {
@@ -112,15 +93,6 @@ export function SportPage() {
     date: getToday(),
   })
 
-  const [newMeal, setNewMeal] = useState<Partial<Meal>>({
-    name: "",
-    time: "12:00",
-    calories: 0,
-    protein: 0,
-    carbs: 0,
-    fats: 0,
-  })
-
   const [profileForm, setProfileForm] = useState<FitnessProfile>(
     state.fitnessProfile || {
       age: 25,
@@ -148,48 +120,8 @@ export function SportPage() {
     intensity: "moderate",
   })
 
-  // Calculer les macros recommandées basé sur le profil
-  const calculateMacros = (profile: FitnessProfile) => {
-    // Calcul du métabolisme de base (Mifflin-St Jeor)
-    let bmr
-    if (profile.gender === "male") {
-      bmr = 10 * profile.weight + 6.25 * profile.height - 5 * profile.age + 5
-    } else {
-      bmr = 10 * profile.weight + 6.25 * profile.height - 5 * profile.age - 161
-    }
-
-    // Facteur d'activité
-    const activityFactors = {
-      sedentary: 1.2,
-      light: 1.375,
-      moderate: 1.55,
-      active: 1.725,
-      very_active: 1.9,
-    }
-
-    let calories = bmr * activityFactors[profile.activityLevel]
-
-    // Ajustement selon l'objectif
-    if (profile.goal === "weight_loss") {
-      calories -= 500 // Déficit de 500 cal pour perdre ~0.5kg/semaine
-    } else if (profile.goal === "muscle_gain") {
-      calories += 300 // Surplus de 300 cal pour prise de masse
-    }
-
-    // Répartition des macros
-    const protein = profile.goal === "muscle_gain" ? profile.weight * 2.2 : profile.weight * 1.8
-    const fats = calories * 0.25 / 9 // 25% des calories en lipides
-    const carbs = (calories - (protein * 4) - (fats * 9)) / 4
-
-    return {
-      calories: Math.round(calories),
-      protein: Math.round(protein),
-      carbs: Math.round(carbs),
-      fats: Math.round(fats),
-    }
-  }
-
-  const recommendedMacros = state.fitnessProfile ? calculateMacros(state.fitnessProfile) : null
+  const effectiveMacros = getEffectiveMacros(state.fitnessProfile)
+  const hasCustomMacros = hasCustomMacrosFor(state.fitnessProfile)
 
   // Calcul de l'hydratation recommandée (30-35ml par kg)
   const calculateHydration = (profile: FitnessProfile) => {
@@ -201,61 +133,20 @@ export function SportPage() {
 
   const recommendedHydration = state.fitnessProfile ? calculateHydration(state.fitnessProfile) : null
 
-  // Nutrition du jour
-  const todayNutrition = state.dailyNutrition.find((n) => n.date === getToday())
-
   // Fonctions calendrier pour workouts
   const getMonthWorkouts = () => {
-    const date = new Date(selectedDate)
-    const year = date.getFullYear()
-    const month = date.getMonth()
-    
-    return state.workoutSessions.filter((workout) => {
-      const workoutDate = new Date(workout.date)
-      return workoutDate.getFullYear() === year && workoutDate.getMonth() === month
-    })
+    // Comparaison sur "AAAA-MM" : new Date("AAAA-MM-JJ") serait lu en UTC
+    const month = selectedDate.slice(0, 7)
+    return state.workoutSessions.filter((workout) => workout.date.slice(0, 7) === month)
   }
 
-  const getCalendarDays = () => {
-    const date = new Date(selectedDate)
-    const year = date.getFullYear()
-    const month = date.getMonth()
-    
-    const firstDay = new Date(year, month, 1)
-    const lastDay = new Date(year, month + 1, 0)
-    const startingDayOfWeek = firstDay.getDay()
-    const daysInMonth = lastDay.getDate()
-    
-    const days = []
-    
-    // Jours du mois précédent
-    for (let i = startingDayOfWeek - 1; i >= 0; i--) {
-      const prevDate = new Date(year, month, -i)
-      days.push({ date: prevDate, isCurrentMonth: false })
-    }
-    
-    // Jours du mois actuel
-    for (let i = 1; i <= daysInMonth; i++) {
-      const currentDate = new Date(year, month, i)
-      days.push({ date: currentDate, isCurrentMonth: true })
-    }
-    
-    return days
-  }
 
   const getWorkoutForDate = (dateStr: string) => {
     return state.workoutSessions.filter((workout) => workout.date === dateStr)
   }
 
-  const navigateMonth = (direction: number) => {
-    const date = new Date(selectedDate)
-    date.setMonth(date.getMonth() + direction)
-    setSelectedDate(date.toISOString().split("T")[0])
-  }
 
-  const calendarDays = getCalendarDays()
-
-  const addWorkout = () => {
+  const saveWorkout = async () => {
     if (!newWorkout.type || !newWorkout.duration) return
 
     if (editingWorkout) {
@@ -268,12 +159,11 @@ export function SportPage() {
         notes: newWorkout.notes,
         intensity: newWorkout.intensity || "moderate",
       }
-      dispatch({ type: "UPDATE_WORKOUT", payload: updated })
+      await persistUpdateWorkout(updated)
       setEditingWorkout(null)
     } else {
       // Mode ajout
-      const workout: WorkoutSession = {
-        id: generateId(),
+      const workout: Omit<WorkoutSession, 'id'> = {
         date: newWorkout.date || getToday(),
         type: newWorkout.type as ActivityType,
         customType: newWorkout.type === "other" ? newWorkout.customType : undefined,
@@ -281,7 +171,7 @@ export function SportPage() {
         notes: newWorkout.notes,
         intensity: newWorkout.intensity || "moderate",
       }
-      dispatch({ type: "ADD_WORKOUT", payload: workout })
+      await persistAddWorkout(workout)
     }
 
     setShowWorkoutForm(false)
@@ -301,33 +191,30 @@ export function SportPage() {
     setShowWorkoutForm(true)
   }
 
-  const deleteWorkout = (id: string) => {
-    dispatch({ type: "DELETE_WORKOUT", payload: id })
+  const deleteWorkout = async (id: string) => {
+    await persistDeleteWorkout(id)
   }
 
-  const toggleWorkoutCompletion = (workout: WorkoutSession) => {
-    dispatch({
-      type: "UPDATE_WORKOUT",
-      payload: { ...workout, completed: !workout.completed },
-    })
+  const toggleWorkoutCompletion = async (workout: WorkoutSession) => {
+    await persistUpdateWorkout({ ...workout, completed: !workout.completed })
   }
 
   // Gestion des programmes
   const generateProgramWorkouts = (program: WorkoutProgram, startDate: string, weeks: number = 4) => {
-    const workouts: WorkoutSession[] = []
+    const workouts: Omit<WorkoutSession, 'id'>[] = []
     const start = new Date(startDate)
-    
+
     for (let week = 0; week < weeks; week++) {
       program.sessions.forEach((session) => {
         // Trouver la prochaine occurrence du jour de la semaine
         const targetDay = session.dayOfWeek // 1=Lun, 2=Mar, 3=Mer, 4=Jeu, 5=Ven, 6=Sam, 0=Dim
-        
+
         // Calculer le début de la semaine courante (lundi)
         const weekStart = new Date(start)
         const currentDay = start.getDay() // 0=Dim, 1=Lun, 2=Mar, etc.
         const daysToMonday = currentDay === 0 ? -6 : 1 - currentDay
         weekStart.setDate(start.getDate() + daysToMonday + (week * 7))
-        
+
         // Calculer le jour cible dans cette semaine
         const date = new Date(weekStart)
         if (targetDay === 0) {
@@ -337,10 +224,9 @@ export function SportPage() {
           // Lundi à Samedi (lundi + targetDay - 1)
           date.setDate(weekStart.getDate() + targetDay - 1)
         }
-        
-        const workout: WorkoutSession = {
-          id: generateId(),
-          date: date.toISOString().split("T")[0],
+
+        const workout: Omit<WorkoutSession, 'id'> = {
+          date: toLocalDateString(date),
           type: session.type,
           customType: session.customType,
           duration: session.duration,
@@ -355,12 +241,13 @@ export function SportPage() {
     return workouts
   }
 
-  const applyProgram = (programId: string, weeks: number = 4) => {
+  const applyProgram = async (programId: string, weeks: number = 4, activeOverride?: boolean) => {
     const program = state.workoutPrograms.find((p) => p.id === programId)
     if (!program) return
+    const isActive = activeOverride ?? program.active
 
     const workouts = generateProgramWorkouts(program, getToday(), weeks)
-    
+
     // Filtrer les workouts qui n'existent pas déjà (éviter les doublons)
     const newWorkouts = workouts.filter((workout) => {
       // Vérifier s'il existe déjà un workout du même programme à la même date
@@ -370,20 +257,21 @@ export function SportPage() {
       return !existingWorkout
     })
 
-    // Ajouter uniquement les nouveaux workouts
-    newWorkouts.forEach((workout) => {
-      dispatch({ type: "ADD_WORKOUT", payload: workout })
-    })
+    // Ajouter uniquement les nouveaux workouts, en persistant chacun
+    const createdWorkouts: WorkoutSession[] = []
+    for (const workout of newWorkouts) {
+      const created = await persistAddWorkout(workout)
+      createdWorkouts.push(created)
+    }
 
     // Créer les missions si activé ET si le programme est actif
-    if (program.autoCreateMissions && program.active) {
-      newWorkouts.forEach((workout) => {
+    if (program.autoCreateMissions && isActive) {
+      for (const workout of createdWorkouts) {
         const mission = state.missions.find(
           (m) => m.timeFrame === "day" && m.dueDate === workout.date && m.title.includes(program.name)
         )
         if (!mission) {
-          const newMission = {
-            id: generateId(),
+          const newMission = await addMission({
             title: `${program.name} - ${activityTypeLabels[workout.type]}`,
             description: `Séance de ${workout.duration} min`,
             timeFrame: "day" as TimeFrame,
@@ -391,17 +279,22 @@ export function SportPage() {
             status: "todo" as TaskStatus,
             tasks: [],
             dueDate: workout.date,
-            createdAt: new Date().toISOString(),
-          }
-          dispatch({ type: "ADD_MISSION", payload: newMission })
-          
-          // Lier le workout à la mission
-          dispatch({
-            type: "UPDATE_WORKOUT",
-            payload: { ...workout, missionId: newMission.id },
           })
+
+          // Lier le workout à la mission
+          await persistUpdateWorkout({ ...workout, missionId: newMission.id })
         }
-      })
+      }
+    }
+  }
+
+  const toggleProgramActive = async (program: WorkoutProgram) => {
+    const nextActive = !program.active
+    await updateWorkoutProgram({ ...program, active: nextActive })
+
+    // Réactiver un programme doit régénérer ses séances à venir sans action supplémentaire
+    if (nextActive) {
+      await applyProgram(program.id, DEFAULT_AUTO_APPLY_WEEKS, true)
     }
   }
 
@@ -492,188 +385,6 @@ export function SportPage() {
     }
   }
 
-  const saveMeal = () => {
-    if (!newMeal.name) return
-
-    if (editingMeal) {
-      // Mode édition
-      if (!todayNutrition) return
-
-      const oldMeal = todayNutrition.meals.find(m => m.id === editingMeal.id)!
-      const updatedMeals = todayNutrition.meals.map(m =>
-        m.id === editingMeal.id
-          ? {
-              ...m,
-              name: newMeal.name!,
-              time: newMeal.time || "12:00",
-              calories: newMeal.calories || 0,
-              protein: newMeal.protein || 0,
-              carbs: newMeal.carbs || 0,
-              fats: newMeal.fats || 0,
-            }
-          : m
-      )
-
-      const updated: DailyNutrition = {
-        ...todayNutrition,
-        meals: updatedMeals,
-        calories: todayNutrition.calories - oldMeal.calories + (newMeal.calories || 0),
-        protein: todayNutrition.protein - oldMeal.protein + (newMeal.protein || 0),
-        carbs: todayNutrition.carbs - oldMeal.carbs + (newMeal.carbs || 0),
-        fats: todayNutrition.fats - oldMeal.fats + (newMeal.fats || 0),
-      }
-      dispatch({ type: "UPDATE_DAILY_NUTRITION", payload: updated })
-    } else {
-      // Mode ajout
-      const meal: Meal = {
-        id: generateId(),
-        name: newMeal.name!,
-        time: newMeal.time || "12:00",
-        calories: newMeal.calories || 0,
-        protein: newMeal.protein || 0,
-        carbs: newMeal.carbs || 0,
-        fats: newMeal.fats || 0,
-      }
-
-      if (todayNutrition) {
-        const updated: DailyNutrition = {
-          ...todayNutrition,
-          meals: [...todayNutrition.meals, meal],
-          calories: todayNutrition.calories + meal.calories,
-          protein: todayNutrition.protein + meal.protein,
-          carbs: todayNutrition.carbs + meal.carbs,
-          fats: todayNutrition.fats + meal.fats,
-        }
-        dispatch({ type: "UPDATE_DAILY_NUTRITION", payload: updated })
-      } else {
-        const newNutrition: DailyNutrition = {
-          id: generateId(),
-          date: getToday(),
-          calories: meal.calories,
-          protein: meal.protein,
-          carbs: meal.carbs,
-          fats: meal.fats,
-          meals: [meal],
-        }
-        dispatch({ type: "ADD_DAILY_NUTRITION", payload: newNutrition })
-      }
-    }
-
-    setShowMealForm(false)
-    setEditingMeal(null)
-    setNewMeal({ name: "", time: "12:00", calories: 0, protein: 0, carbs: 0, fats: 0 })
-  }
-
-  const startEditMeal = (meal: Meal) => {
-    setEditingMeal(meal)
-    setNewMeal({
-      name: meal.name,
-      time: meal.time,
-      calories: meal.calories,
-      protein: meal.protein,
-      carbs: meal.carbs,
-      fats: meal.fats,
-    })
-    setShowMealForm(true)
-  }
-
-  const cancelEditMeal = () => {
-    setEditingMeal(null)
-    setShowMealForm(false)
-    setNewMeal({ name: "", time: "12:00", calories: 0, protein: 0, carbs: 0, fats: 0 })
-  }
-
-  const deleteMeal = (mealId: string) => {
-    if (!todayNutrition) return
-
-    const meal = todayNutrition.meals.find((m) => m.id === mealId)
-    if (!meal) return
-
-    const updated: DailyNutrition = {
-      ...todayNutrition,
-      meals: todayNutrition.meals.filter((m) => m.id !== mealId),
-      calories: todayNutrition.calories - meal.calories,
-      protein: todayNutrition.protein - meal.protein,
-      carbs: todayNutrition.carbs - meal.carbs,
-      fats: todayNutrition.fats - meal.fats,
-    }
-    dispatch({ type: "UPDATE_DAILY_NUTRITION", payload: updated })
-  }
-
-  // Gestion des presets
-  const savePreset = () => {
-    if (!newPreset.name) return
-    
-    const preset: MealPreset = {
-      id: editingPreset?.id || generateId(),
-      name: newPreset.name!,
-      category: newPreset.category as "breakfast" | "lunch" | "snack" | "dinner",
-      calories: newPreset.calories || 0,
-      protein: newPreset.protein || 0,
-      carbs: newPreset.carbs || 0,
-      fats: newPreset.fats || 0,
-    }
-    
-    if (editingPreset) {
-      setMealPresets(mealPresets.map(p => p.id === preset.id ? preset : p))
-    } else {
-      setMealPresets([...mealPresets, preset])
-    }
-    
-    setShowPresetForm(false)
-    setEditingPreset(null)
-    setNewPreset({ name: "", category: "breakfast", calories: 0, protein: 0, carbs: 0, fats: 0 })
-  }
-  
-  const deletePreset = (presetId: string) => {
-    setMealPresets(mealPresets.filter(p => p.id !== presetId))
-  }
-  
-  const applyPreset = (preset: MealPreset) => {
-    const timeMap = {
-      breakfast: "08:00",
-      lunch: "12:30",
-      snack: "16:00",
-      dinner: "19:30",
-    }
-    setNewMeal({
-      name: preset.name,
-      time: timeMap[preset.category],
-      calories: preset.calories,
-      protein: preset.protein,
-      carbs: preset.carbs,
-      fats: preset.fats,
-    })
-    setShowMealForm(true)
-  }
-  
-  // Calcul des stats mensuelles
-  const getMonthlyNutritionStats = () => {
-    const [year, month] = nutritionMonth.split("-").map(Number)
-    const monthData = state.dailyNutrition.filter(n => {
-      const [nYear, nMonth] = n.date.split("-").map(Number)
-      return nYear === year && nMonth === month
-    })
-    
-    if (monthData.length === 0) return null
-    
-    const totalCalories = monthData.reduce((sum, d) => sum + d.calories, 0)
-    const totalProtein = monthData.reduce((sum, d) => sum + d.protein, 0)
-    const totalCarbs = monthData.reduce((sum, d) => sum + d.carbs, 0)
-    const totalFats = monthData.reduce((sum, d) => sum + d.fats, 0)
-    
-    return {
-      daysTracked: monthData.length,
-      avgCalories: Math.round(totalCalories / monthData.length),
-      avgProtein: Math.round(totalProtein / monthData.length),
-      avgCarbs: Math.round(totalCarbs / monthData.length),
-      avgFats: Math.round(totalFats / monthData.length),
-      totalCalories,
-      dailyData: monthData.sort((a, b) => a.date.localeCompare(b.date)),
-    }
-  }
-  
-  const monthlyStats = getMonthlyNutritionStats()
   // Statistiques - Ne compter QUE les entraînements passés ET complétés
   const today = getToday()
   const last30DaysWorkouts = state.workoutSessions.filter((w) => {
@@ -701,19 +412,13 @@ export function SportPage() {
     intense: "Intense",
   }
 
-  const goalLabels = {
-    weight_loss: "Perte de poids",
-    muscle_gain: "Prise de masse",
-    maintenance: "Maintenance",
-  }
-
   if (showProfileForm && !state.fitnessProfile) {
     return (
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Dumbbell className="h-8 w-8" />
-            Sport & Nutrition
+            Sport
           </h1>
           <p className="text-muted-foreground">Configuration de votre profil</p>
         </div>
@@ -828,12 +533,12 @@ export function SportPage() {
   return (
     <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Sport & Nutrition</h1>
-        <p className="text-sm text-muted-foreground">Suivez vos entraînements et votre alimentation</p>
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Sport</h1>
+        <p className="text-sm text-muted-foreground">Suivez vos entraînements et vos performances</p>
       </div>
 
       {/* Stats globales */}
-      <div className="grid gap-2 sm:gap-4 grid-cols-2 md:grid-cols-4">
+      <div className="grid gap-2 sm:gap-4 grid-cols-2 @2xl/main:grid-cols-4">
         <Card className="py-2 gap-0">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Entraînements (30j)</CardTitle>
@@ -880,7 +585,7 @@ export function SportPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
-        <TabsList className="grid w-full grid-cols-5 h-auto">
+        <TabsList data-tour="sport-tabs" className="grid w-full grid-cols-4 h-auto">
           <TabsTrigger value="workouts" className="flex-col sm:flex-row gap-1 py-2 text-xs sm:text-sm">
             <Dumbbell className="h-4 w-4" />
             <span className="hidden sm:inline">Entraînements</span>
@@ -890,11 +595,6 @@ export function SportPage() {
             <Calendar className="h-4 w-4" />
             <span className="hidden sm:inline">Programmes</span>
             <span className="sm:hidden">Prog.</span>
-          </TabsTrigger>
-          <TabsTrigger value="nutrition" className="flex-col sm:flex-row gap-1 py-2 text-xs sm:text-sm">
-            <Apple className="h-4 w-4" />
-            <span className="hidden sm:inline">Nutrition</span>
-            <span className="sm:hidden">Nutri.</span>
           </TabsTrigger>
           <TabsTrigger value="prs" className="flex-col sm:flex-row gap-1 py-2 text-xs sm:text-sm">
             <Trophy className="h-4 w-4" />
@@ -910,73 +610,35 @@ export function SportPage() {
         <TabsContent value="workouts" className="space-y-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
                   <CardTitle>Calendrier d'entraînement</CardTitle>
-                  <CardDescription>
-                    {new Date(selectedDate).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}
-                  </CardDescription>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="icon" onClick={() => navigateMonth(-1)}>
-                    ←
-                  </Button>
-                  <Button variant="outline" onClick={() => setSelectedDate(getToday())}>
-                    Aujourd'hui
-                  </Button>
-                  <Button variant="outline" size="icon" onClick={() => navigateMonth(1)}>
-                    →
-                  </Button>
-                </div>
+                <MonthNav
+                  label={monthLabel(selectedDate)}
+                  onPrev={() => setSelectedDate(shiftMonth(selectedDate, -1))}
+                  onNext={() => setSelectedDate(shiftMonth(selectedDate, 1))}
+                  onToday={() => setSelectedDate(getToday())}
+                />
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Calendrier */}
-              <div className="border rounded-lg overflow-hidden">
-                {/* Jours de la semaine */}
-                <div className="grid grid-cols-7 bg-muted">
-                  {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => (
-                    <div key={day} className="p-2 text-center text-sm font-semibold">
-                      {day}
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Grille du calendrier */}
-                <div className="grid grid-cols-7">
-                  {calendarDays.map((day, index) => {
-                    const dateStr = day.date.toISOString().split("T")[0]
-                    const workouts = getWorkoutForDate(dateStr)
-                    const isToday = dateStr === getToday()
-                    
-                    return (
-                      <div
-                        key={index}
-                        className={`
-                          min-h-28 p-2 border-t border-r relative group/day hover:bg-accent/50 transition-colors
-                          ${!day.isCurrentMonth ? "bg-muted/30 text-muted-foreground" : ""}
-                          ${isToday ? "bg-primary/5 ring-2 ring-primary ring-inset" : ""}
-                          ${workouts.length > 0 ? "bg-green-50 dark:bg-green-950/20" : ""}
-                        `}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="text-sm font-semibold">
-                            {day.date.getDate()}
-                          </div>
-                          {isToday && !isMobile && (
-                            <Badge variant="default" className="text-xs px-1.5 py-0 h-5">
-                              Aujourd'hui
-                            </Badge>
-                          )}
-                        </div>
+              <MonthCalendar
+                day={selectedDate}
+                dayClassName={(day) => getWorkoutForDate(day.key).length > 0 && "bg-green-50 dark:bg-green-950/20"}
+                renderDay={(day) => {
+                  const dateStr = day.key
+                  const workouts = getWorkoutForDate(dateStr)
+                  return (
+                    <>
                         {workouts.length > 0 && (
-                          <div className="space-y-1 max-h-20 overflow-y-auto">
+                          <div className="min-w-0 space-y-1 max-h-20 overflow-y-auto">
                             {workouts.map((workout) => (
                               <div
                                 key={workout.id}
                                 className="group relative"
                               >
-                                <div className={`text-xs px-1 py-0.5 rounded flex items-center gap-1 ${
+                                <div className={`text-xs px-1 py-0.5 rounded flex min-w-0 items-center gap-1 ${
                                   workout.completed
                                     ? "bg-green-500/20 text-green-700 dark:text-green-300 line-through"
                                     : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
@@ -990,7 +652,7 @@ export function SportPage() {
                                   >
                                     {workout.type === "other" && workout.customType ? workout.customType : activityTypeLabels[workout.type]}
                                   </span>
-                                  <div className="flex items-center gap-0.5">
+                                  <div className="hidden items-center gap-0.5 @min-[5rem]:flex">
                                     <CheckCircle2
                                       className={`h-3 w-3 flex-shrink-0 cursor-pointer hover:scale-110 transition-transform ${
                                         workout.completed ? "text-green-600" : "text-muted-foreground hover:text-green-600"
@@ -1011,7 +673,7 @@ export function SportPage() {
                                     />
                                   </div>
                                 </div>
-                                <div className="text-xs text-muted-foreground px-1">
+                                <div className="truncate text-xs text-muted-foreground px-1">
                                   {workout.duration} min
                                 </div>
                               </div>
@@ -1021,7 +683,8 @@ export function SportPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="absolute bottom-1 right-1 h-6 w-6 opacity-0 group-hover/day:opacity-100 transition-opacity"
+                          aria-label="Ajouter un entraînement"
+                          className="absolute bottom-1 right-1 h-6 w-6 opacity-0 group-hover/day:opacity-100 focus-visible:opacity-100 transition-opacity"
                           onClick={(e) => {
                             e.stopPropagation()
                             setNewWorkout({
@@ -1034,11 +697,10 @@ export function SportPage() {
                         >
                           <Plus className="size-5" />
                         </Button>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
+                    </>
+                  )
+                }}
+              />
 
               {/* Dialog pour ajout/édition */}
               <Dialog open={showWorkoutForm} onOpenChange={(open) => {
@@ -1140,7 +802,7 @@ export function SportPage() {
                     }}>
                       Annuler
                     </Button>
-                    <Button onClick={addWorkout}>{editingWorkout ? "Enregistrer" : "Ajouter"}</Button>
+                    <Button onClick={saveWorkout}>{editingWorkout ? "Enregistrer" : "Ajouter"}</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -1166,8 +828,8 @@ export function SportPage() {
             <CardContent>
               {state.workoutPrograms.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  <Calendar className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                  <p>Aucun programme d'entraînement</p>
+                  <Lottie src="/animations/utilisees/chat qui joue.json" adaptive="ink" className="mx-auto mb-2 h-32 w-72 max-w-full text-foreground" />
+                  <p>Pas de programme de sport ?! Hmmmm </p>
                   <p className="text-sm">Créez votre premier programme pour organiser vos séances</p>
                 </div>
               ) : (
@@ -1188,12 +850,7 @@ export function SportPage() {
                               <Button
                                 variant={program.active ? "default" : "outline"}
                                 size="sm"
-                                onClick={async () => {
-                                  await updateWorkoutProgram({
-                                    ...program,
-                                    active: !program.active,
-                                  })
-                                }}
+                                onClick={() => toggleProgramActive(program)}
                               >
                                 {program.active ? "Actif" : "Inactif"}
                               </Button>
@@ -1240,12 +897,7 @@ export function SportPage() {
 
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem
-                                    onClick={async () => {
-                                      await updateWorkoutProgram({
-                                        ...program,
-                                        active: !program.active,
-                                      })
-                                    }}
+                                    onClick={() => toggleProgramActive(program)}
                                   >
                                     {program.active ? "Désactiver" : "Activer"}
                                   </DropdownMenuItem>
@@ -1289,7 +941,7 @@ export function SportPage() {
                             <Clock className="h-4 w-4" />
                             <span>{program.sessions.length} séances par semaine</span>
                             {program.autoCreateMissions && (
-                              <span className="ml-4 text-green-600">• Missions automatiques</span>
+                              <span className="ml-4 text-green-600">• Objectifs automatiques</span>
                             )}
                           </div>
                           <div className="grid grid-cols-7 gap-2 mt-4">
@@ -1327,483 +979,6 @@ export function SportPage() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Onglet Nutrition */}
-        <TabsContent value="nutrition" className="space-y-6">
-          {recommendedMacros && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Objectifs nutritionnels du jour</CardTitle>
-                <CardDescription>Basé sur votre profil ({goalLabels[state.fitnessProfile!.goal]})</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="text-center py-4 px-1 rounded-lg border">
-                    <p className="text-sm sm:text-2xl font-bold">{recommendedMacros.calories}kcal</p>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Calories</p>
-                    {todayNutrition && (
-                      <p className="text-xs mt-1">{todayNutrition.calories}/{recommendedMacros.calories}</p>
-                    )}
-                  </div>
-                  <div className="text-center py-4 px-1 rounded-lg border">
-                    <p className="text-sm sm:text-2xl font-bold">{recommendedMacros.protein}g</p>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Protéines</p>
-                    {todayNutrition && (
-                      <p className="text-xs mt-1">{todayNutrition.protein}g/{recommendedMacros.protein}g</p>
-                    )}
-                  </div>
-                  <div className="text-center py-4 px-1 rounded-lg border">
-                    <p className="text-sm sm:text-2xl font-bold">{recommendedMacros.carbs}g</p>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Glucides</p>
-                    {todayNutrition && (
-                      <p className="text-xs mt-1">{todayNutrition.carbs}g/{recommendedMacros.carbs}g</p>
-                    )}
-                  </div>
-                  <div className="text-center py-4 px-1 rounded-lg border">
-                    <p className="text-sm sm:text-2xl font-bold">{recommendedMacros.fats}g</p>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Lipides</p>
-                    {todayNutrition && (
-                      <p className="text-xs mt-1">{todayNutrition.fats}g/{recommendedMacros.fats}g</p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Nutrition</CardTitle>
-                  <CardDescription>Suivi de votre alimentation</CardDescription>
-                </div>
-                <div className="flex gap-2">
-                  <Button 
-                    variant={nutritionView === "today" ? "default" : "outline"} 
-                    size="sm"
-                    onClick={() => setNutritionView("today")}
-                  >
-                    Aujourd'hui
-                  </Button>
-                  <Button 
-                    variant={nutritionView === "history" ? "default" : "outline"} 
-                    size="sm"
-                    onClick={() => setNutritionView("history")}
-                  >
-                    Historique
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {nutritionView === "today" ? (
-                <>
-                  {/* Presets personnalisables */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium">Saisie rapide</h4>
-                      <Button variant="ghost" size="sm" onClick={() => {
-                        setNewPreset({ name: "", category: "breakfast", calories: 0, protein: 0, carbs: 0, fats: 0 })
-                        setEditingPreset(null)
-                        setShowPresetForm(!showPresetForm)
-                      }}>
-                        <Plus className="h-4 w-4 mr-1" />
-                        Ajouter preset
-                      </Button>
-                    </div>
-                    
-                    {showPresetForm && (
-                      <div className="p-4 border rounded-lg space-y-4 bg-muted/50">
-                        <h4 className="font-semibold">{editingPreset ? "Modifier le preset" : "Nouveau preset"}</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <Label>Nom</Label>
-                            <Input
-                              placeholder="Ex: Omelette, Salade César..."
-                              value={newPreset.name}
-                              onChange={(e) => setNewPreset({ ...newPreset, name: e.target.value })}
-                            />
-                          </div>
-                          <div>
-                            <Label>Catégorie</Label>
-                            <Select 
-                              value={newPreset.category} 
-                              onValueChange={(v) => setNewPreset({ ...newPreset, category: v as any })}
-                            >
-                              <SelectTrigger><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="breakfast">🥐 Petit-déjeuner</SelectItem>
-                                <SelectItem value="lunch">🍽️ Déjeuner</SelectItem>
-                                <SelectItem value="snack">🍎 Collation</SelectItem>
-                                <SelectItem value="dinner">🍖 Dîner</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-4 gap-4">
-                          <div>
-                            <Label>Calories</Label>
-                            <Input type="number" value={newPreset.calories} onChange={(e) => setNewPreset({ ...newPreset, calories: parseInt(e.target.value) || 0 })} />
-                          </div>
-                          <div>
-                            <Label>Protéines (g)</Label>
-                            <Input type="number" value={newPreset.protein} onChange={(e) => setNewPreset({ ...newPreset, protein: parseInt(e.target.value) || 0 })} />
-                          </div>
-                          <div>
-                            <Label>Glucides (g)</Label>
-                            <Input type="number" value={newPreset.carbs} onChange={(e) => setNewPreset({ ...newPreset, carbs: parseInt(e.target.value) || 0 })} />
-                          </div>
-                          <div>
-                            <Label>Lipides (g)</Label>
-                            <Input type="number" value={newPreset.fats} onChange={(e) => setNewPreset({ ...newPreset, fats: parseInt(e.target.value) || 0 })} />
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button onClick={savePreset}>{editingPreset ? "Enregistrer" : "Créer"}</Button>
-                          <Button variant="outline" onClick={() => { setShowPresetForm(false); setEditingPreset(null) }}>Annuler</Button>
-                        </div>
-                      </div>
-                    )}
-                    
-                    <div className="flex flex-wrap gap-2">
-                      {mealPresets.map((preset) => (
-                        <div key={preset.id} className="group relative">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => applyPreset(preset)}
-                          >
-                            {preset.category === "breakfast" ? "🥐" : preset.category === "lunch" ? "🍽️" : preset.category === "snack" ? "🍎" : "🍖"} {preset.name}
-                          </Button>
-                          <div className="absolute -top-2 -right-2 hidden group-hover:flex gap-1">
-                            <button 
-                              className="p-1 rounded-full bg-muted border text-xs"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setNewPreset(preset)
-                                setEditingPreset(preset)
-                                setShowPresetForm(true)
-                              }}
-                            >
-                              ✏️
-                            </button>
-                            <button 
-                              className="p-1 rounded-full bg-destructive/10 border border-destructive/20 text-xs"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                deletePreset(preset.id)
-                              }}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                      {mealPresets.length === 0 && (
-                        <p className="text-sm text-muted-foreground">Aucun preset. Créez-en un pour la saisie rapide.</p>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-end">
-                    <Button onClick={() => setShowMealForm(!showMealForm)}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Repas personnalisé
-                    </Button>
-                  </div>
-              
-              {showMealForm && (
-                <div className="p-4 border rounded-lg space-y-4 bg-muted/50">
-                  <h3 className="font-semibold">{editingMeal ? "Modifier le repas" : "Ajouter un repas"}</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Nom du repas</Label>
-                      <Input
-                        placeholder="Ex: Petit-déjeuner, Déjeuner..."
-                        value={newMeal.name}
-                        onChange={(e) => setNewMeal({ ...newMeal, name: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label>Heure</Label>
-                      <Input
-                        type="time"
-                        value={newMeal.time}
-                        onChange={(e) => setNewMeal({ ...newMeal, time: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-4 gap-4">
-                    <div>
-                      <Label>Calories</Label>
-                      <Input
-                        type="number"
-                        value={newMeal.calories}
-                        onChange={(e) => setNewMeal({ ...newMeal, calories: parseFloat(e.target.value) })}
-                      />
-                    </div>
-                    <div>
-                      <Label>Protéines (g)</Label>
-                      <Input
-                        type="number"
-                        value={newMeal.protein}
-                        onChange={(e) => setNewMeal({ ...newMeal, protein: parseFloat(e.target.value) })}
-                      />
-                    </div>
-                    <div>
-                      <Label>Glucides (g)</Label>
-                      <Input
-                        type="number"
-                        value={newMeal.carbs}
-                        onChange={(e) => setNewMeal({ ...newMeal, carbs: parseFloat(e.target.value) })}
-                      />
-                    </div>
-                    <div>
-                      <Label>Lipides (g)</Label>
-                      <Input
-                        type="number"
-                        value={newMeal.fats}
-                        onChange={(e) => setNewMeal({ ...newMeal, fats: parseFloat(e.target.value) })}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button onClick={saveMeal}>{editingMeal ? "Enregistrer" : "Ajouter"}</Button>
-                    <Button variant="outline" onClick={cancelEditMeal}>
-                      Annuler
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                {todayNutrition?.meals
-                  .sort((a, b) => a.time.localeCompare(b.time))
-                  .map((meal) => (
-                    <div
-                      key={meal.id}
-                      className="flex items-center justify-between p-4 rounded-lg border bg-card"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-4">
-                          <div>
-                            <p className="font-semibold">{meal.name}</p>
-                            <p className="text-sm text-muted-foreground">{meal.time}</p>
-                          </div>
-                          <div className="flex gap-2 text-sm">
-                            <span className="px-2 py-1 rounded bg-blue-500/10 text-blue-600">
-                              {meal.calories} cal
-                            </span>
-                            <span className="px-2 py-1 rounded bg-green-500/10 text-green-600">
-                              P: {meal.protein}g
-                            </span>
-                            <span className="px-2 py-1 rounded bg-yellow-500/10 text-yellow-600">
-                              C: {meal.carbs}g
-                            </span>
-                            <span className="px-2 py-1 rounded bg-orange-500/10 text-orange-600">
-                              L: {meal.fats}g
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => startEditMeal(meal)}
-                        >
-                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteMeal(meal.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                {!todayNutrition || todayNutrition.meals.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    Aucun repas enregistré aujourd'hui
-                  </p>
-                ) : null}
-              </div>
-              </>
-              ) : (
-                /* Vue Historique Mensuel */
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-medium">Historique mensuel</h4>
-                    <Input 
-                      type="month" 
-                      value={nutritionMonth}
-                      onChange={(e) => setNutritionMonth(e.target.value)}
-                      className="w-auto"
-                    />
-                  </div>
-                  
-                  {monthlyStats ? (
-                    <>
-                      {/* Stats du mois */}
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                        <div className="p-4 rounded-lg border text-center">
-                          <p className="text-2xl font-bold text-primary">{monthlyStats.daysTracked}</p>
-                          <p className="text-sm text-muted-foreground">Jours suivis</p>
-                        </div>
-                        <div className="p-4 rounded-lg border text-center">
-                          <p className="text-2xl font-bold">{monthlyStats.avgCalories}</p>
-                          <p className="text-sm text-muted-foreground">Cal/jour moy.</p>
-                        </div>
-                        <div className="p-4 rounded-lg border text-center">
-                          <p className="text-2xl font-bold text-green-600">{monthlyStats.avgProtein}g</p>
-                          <p className="text-sm text-muted-foreground">Protéines/jour</p>
-                        </div>
-                        <div className="p-4 rounded-lg border text-center">
-                          <p className="text-2xl font-bold text-yellow-600">{monthlyStats.avgCarbs}g</p>
-                          <p className="text-sm text-muted-foreground">Glucides/jour</p>
-                        </div>
-                        <div className="p-4 rounded-lg border text-center">
-                          <p className="text-2xl font-bold text-orange-600">{monthlyStats.avgFats}g</p>
-                          <p className="text-sm text-muted-foreground">Lipides/jour</p>
-                        </div>
-                      </div>
-                      
-                      {/* Comparaison avec objectifs */}
-                      {recommendedMacros && (
-                        <div className="p-4 rounded-lg border bg-muted/50">
-                          <h5 className="font-medium mb-3">Comparaison avec vos objectifs</h5>
-                          <div className="grid grid-cols-4 gap-4">
-                            <div>
-                              <div className="flex justify-between text-sm mb-1">
-                                <span>Calories</span>
-                                <span className={monthlyStats.avgCalories >= recommendedMacros.calories * 0.9 && monthlyStats.avgCalories <= recommendedMacros.calories * 1.1 ? "text-green-600" : "text-orange-600"}>
-                                  {Math.round((monthlyStats.avgCalories / recommendedMacros.calories) * 100)}%
-                                </span>
-                              </div>
-                              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-primary transition-all" 
-                                  style={{ width: `${Math.min(100, (monthlyStats.avgCalories / recommendedMacros.calories) * 100)}%` }}
-                                />
-                              </div>
-                            </div>
-                            <div>
-                              <div className="flex justify-between text-sm mb-1">
-                                <span>Protéines</span>
-                                <span className={monthlyStats.avgProtein >= recommendedMacros.protein * 0.9 ? "text-green-600" : "text-orange-600"}>
-                                  {Math.round((monthlyStats.avgProtein / recommendedMacros.protein) * 100)}%
-                                </span>
-                              </div>
-                              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-green-500 transition-all" 
-                                  style={{ width: `${Math.min(100, (monthlyStats.avgProtein / recommendedMacros.protein) * 100)}%` }}
-                                />
-                              </div>
-                            </div>
-                            <div>
-                              <div className="flex justify-between text-sm mb-1">
-                                <span>Glucides</span>
-                                <span>{Math.round((monthlyStats.avgCarbs / recommendedMacros.carbs) * 100)}%</span>
-                              </div>
-                              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-yellow-500 transition-all" 
-                                  style={{ width: `${Math.min(100, (monthlyStats.avgCarbs / recommendedMacros.carbs) * 100)}%` }}
-                                />
-                              </div>
-                            </div>
-                            <div>
-                              <div className="flex justify-between text-sm mb-1">
-                                <span>Lipides</span>
-                                <span>{Math.round((monthlyStats.avgFats / recommendedMacros.fats) * 100)}%</span>
-                              </div>
-                              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-orange-500 transition-all" 
-                                  style={{ width: `${Math.min(100, (monthlyStats.avgFats / recommendedMacros.fats) * 100)}%` }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Liste des jours */}
-                      <div className="space-y-2">
-                        <h5 className="font-medium">Détail par jour</h5>
-                        <div className="max-h-96 overflow-y-auto space-y-2">
-                          {monthlyStats.dailyData.map((day) => (
-                            <div key={day.id} className="flex items-center justify-between p-3 rounded-lg border">
-                              <div>
-                                <p className="font-medium">
-                                  {new Date(day.date).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })}
-                                </p>
-                                <p className="text-sm text-muted-foreground">{day.meals.length} repas</p>
-                              </div>
-                              <div className="flex gap-3 text-sm">
-                                <span className="px-2 py-1 rounded bg-primary/10">{day.calories} cal</span>
-                                <span className="px-2 py-1 rounded bg-green-500/10 text-green-600">P: {day.protein}g</span>
-                                <span className="px-2 py-1 rounded bg-yellow-500/10 text-yellow-600">G: {day.carbs}g</span>
-                                <span className="px-2 py-1 rounded bg-orange-500/10 text-orange-600">L: {day.fats}g</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-center text-muted-foreground py-8">
-                      Aucune donnée de nutrition pour ce mois
-                    </p>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Conseils nutritionnels */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Conseils nutritionnels</CardTitle>
-              <CardDescription>Recommandations pour optimiser vos performances</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {/* Répartition des repas */}
-                <div>
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
-                    Répartition des repas
-                  </h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 rounded-lg bg-muted border">
-                      <p className="text-sm font-medium">Petit-déjeuner</p>
-                      <p className="text-2xl font-bold">25%</p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-muted border">
-                      <p className="text-sm font-medium">Déjeuner</p>
-                      <p className="text-2xl font-bold">30%</p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-muted border">
-                      <p className="text-sm font-medium">Collation</p>
-                      <p className="text-2xl font-bold">15%</p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-muted border">
-                      <p className="text-sm font-medium">Dîner</p>
-                      <p className="text-2xl font-bold">30%</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1888,7 +1063,7 @@ export function SportPage() {
                 </div>
               )}
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 @2xl/main:grid-cols-2">
                 {state.personalRecords
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                   .map((pr) => (
@@ -1936,7 +1111,8 @@ export function SportPage() {
                   <CardTitle>Mon profil fitness</CardTitle>
                   <CardDescription>Informations personnelles et objectifs</CardDescription>
                 </div>
-                <Button variant="outline" onClick={() => setShowProfileForm(true)}>
+                <Button variant="outline" size="sm" className="shrink-0" onClick={() => setShowProfileForm(true)}>
+                  <Pencil className="size-4" />
                   Modifier
                 </Button>
               </div>
@@ -1963,25 +1139,31 @@ export function SportPage() {
                     </div>
                   </div>
 
-                  {recommendedMacros && (
+                  {effectiveMacros && (
                     <div className="p-4 rounded-lg bg-muted">
-                      <h4 className="font-semibold mb-2">Besoins nutritionnels quotidiens</h4>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-semibold flex items-center gap-2">
+                          Besoins nutritionnels quotidiens
+                          {hasCustomMacros && <Badge variant="secondary">Personnalisé</Badge>}
+                        </h4>
+                        <span className="text-xs text-muted-foreground">Modifiables dans Nutrition</span>
+                      </div>
                       <div className="grid grid-cols-4 gap-3 text-center">
                         <div>
                           <p className="text-sm text-muted-foreground">Calories</p>
-                          <p className="text-lg font-bold">{recommendedMacros.calories}</p>
+                          <p className="text-lg font-bold">{effectiveMacros.calories}</p>
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">Protéines</p>
-                          <p className="text-lg font-bold">{recommendedMacros.protein}g</p>
+                          <p className="text-lg font-bold">{effectiveMacros.protein}g</p>
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">Glucides</p>
-                          <p className="text-lg font-bold">{recommendedMacros.carbs}g</p>
+                          <p className="text-lg font-bold">{effectiveMacros.carbs}g</p>
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">Lipides</p>
-                          <p className="text-lg font-bold">{recommendedMacros.fats}g</p>
+                          <p className="text-lg font-bold">{effectiveMacros.fats}g</p>
                         </div>
                       </div>
                     </div>
@@ -2000,7 +1182,7 @@ export function SportPage() {
               <CardDescription>Pour optimiser vos performances et récupération</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid @2xl/main:grid-cols-2 gap-4">
                 <div className="p-4 rounded-lg bg-muted border">
                   <div className="flex items-center gap-3">
                     <Droplets className="h-10 w-10" />
@@ -2170,7 +1352,7 @@ export function SportPage() {
                   className="rounded"
                 />
                 <Label htmlFor="autoMissions" className="cursor-pointer">
-                  Créer automatiquement les missions du jour
+                  Créer automatiquement les objectifs du jour
                 </Label>
               </div>
             </div>

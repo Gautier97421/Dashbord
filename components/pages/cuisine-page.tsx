@@ -10,11 +10,30 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { useLiveRefresh } from '@/lib/live-sync'
 
 interface Ingredient {
   name: string
   quantity: string
   unit: string
+  // Référence macro (pour 100g/100ml) si l'ingrédient a été choisi dans la base pré-remplie
+  caloriesPer100?: number
+  proteinPer100?: number
+  carbsPer100?: number
+  fatPer100?: number
+}
+
+interface IngredientOption {
+  id: string
+  name: string
+  category: string
+  unit: string
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
 }
 
 interface Recipe {
@@ -53,6 +72,9 @@ export function CuisinePage() {
   const [carbs, setCarbs] = useState<number | ''>('')
   const [fat, setFat] = useState<number | ''>('')
   const [calories, setCalories] = useState<number | ''>('')
+  const [openIngredientRow, setOpenIngredientRow] = useState<number | null>(null)
+  const [ingredientQuery, setIngredientQuery] = useState('')
+  const [ingredientResults, setIngredientResults] = useState<IngredientOption[]>([])
   const [prepTime, setPrepTime] = useState<number | ''>('')
   const [cookTime, setCookTime] = useState<number | ''>('')
   const [servings, setServings] = useState<number | ''>('')
@@ -61,6 +83,24 @@ export function CuisinePage() {
   useEffect(() => {
     fetchRecipes()
   }, [])
+
+  // Recherche débouncée dans la base d'ingrédients pré-remplie
+  useEffect(() => {
+    if (openIngredientRow === null) return
+
+    const timeout = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/ingredients?q=${encodeURIComponent(ingredientQuery)}`)
+        if (response.ok) {
+          setIngredientResults(await response.json())
+        }
+      } catch (error) {
+        console.error('Error searching ingredients:', error)
+      }
+    }, 250)
+
+    return () => clearTimeout(timeout)
+  }, [ingredientQuery, openIngredientRow])
 
   const fetchRecipes = async () => {
     try {
@@ -76,6 +116,9 @@ export function CuisinePage() {
     }
   }
 
+  // Recettes ajoutées depuis un autre appareil
+  useLiveRefresh(fetchRecipes)
+
   const handleAddIngredient = () => {
     setIngredients([...ingredients, { name: '', quantity: '', unit: '' }])
   }
@@ -84,10 +127,71 @@ export function CuisinePage() {
     setIngredients(ingredients.filter((_, i) => i !== index))
   }
 
-  const handleIngredientChange = (index: number, field: keyof Ingredient, value: string) => {
+  const handleIngredientChange = (index: number, field: 'name' | 'quantity' | 'unit', value: string) => {
     const newIngredients = [...ingredients]
-    newIngredients[index][field] = value
+    newIngredients[index] = { ...newIngredients[index], [field]: value }
+    // Si le nom est modifié à la main, on abandonne la référence macro de la suggestion précédente
+    if (field === 'name') {
+      delete newIngredients[index].caloriesPer100
+      delete newIngredients[index].proteinPer100
+      delete newIngredients[index].carbsPer100
+      delete newIngredients[index].fatPer100
+    }
     setIngredients(newIngredients)
+  }
+
+  const selectIngredientOption = (index: number, option: IngredientOption) => {
+    const newIngredients = [...ingredients]
+    newIngredients[index] = {
+      ...newIngredients[index],
+      name: option.name,
+      unit: newIngredients[index].unit || option.unit,
+      caloriesPer100: option.calories,
+      proteinPer100: option.protein,
+      carbsPer100: option.carbs,
+      fatPer100: option.fat,
+    }
+    setIngredients(newIngredients)
+    setOpenIngredientRow(null)
+    setIngredientQuery('')
+  }
+
+  // Contribution nutritionnelle d'une ligne d'ingrédient, calculée au prorata de la quantité (g/ml uniquement)
+  const computeContribution = (ingredient: Ingredient) => {
+    if (ingredient.caloriesPer100 == null) return null
+    const qty = parseFloat(ingredient.quantity)
+    if (isNaN(qty)) return null
+    const unit = ingredient.unit.trim().toLowerCase()
+    if (unit !== 'g' && unit !== 'ml' && unit !== '') return null
+
+    const factor = qty / 100
+    return {
+      calories: Math.round((ingredient.caloriesPer100 || 0) * factor),
+      protein: Math.round((ingredient.proteinPer100 || 0) * factor * 10) / 10,
+      carbs: Math.round((ingredient.carbsPer100 || 0) * factor * 10) / 10,
+      fat: Math.round((ingredient.fatPer100 || 0) * factor * 10) / 10,
+    }
+  }
+
+  const applyContributionsToMacros = () => {
+    const totals = ingredients.reduce(
+      (acc, ingredient) => {
+        const contribution = computeContribution(ingredient)
+        if (!contribution) return acc
+        return {
+          calories: acc.calories + contribution.calories,
+          protein: acc.protein + contribution.protein,
+          carbs: acc.carbs + contribution.carbs,
+          fat: acc.fat + contribution.fat,
+        }
+      },
+      { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    )
+
+    setCalories(Math.round(totals.calories))
+    setProtein(Math.round(totals.protein * 10) / 10)
+    setCarbs(Math.round(totals.carbs * 10) / 10)
+    setFat(Math.round(totals.fat * 10) / 10)
   }
 
   const resetForm = () => {
@@ -198,7 +302,7 @@ export function CuisinePage() {
           if (!open) resetForm()
         }}>
           <DialogTrigger asChild>
-            <Button>
+            <Button data-tour="cuisine-add">
               <Plus className="mr-2 size-4" />
               Nouvelle recette
             </Button>
@@ -251,42 +355,98 @@ export function CuisinePage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Ingrédients</Label>
-                  <Button type="button" variant="outline" size="sm" onClick={handleAddIngredient}>
-                    <Plus className="size-4" />
-                  </Button>
-                </div>
-                {ingredients.map((ingredient, index) => (
-                  <div key={index} className="flex gap-2">
-                    <Input
-                      placeholder="Ingrédient"
-                      value={ingredient.name}
-                      onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
-                      className="flex-1"
-                    />
-                    <Input
-                      placeholder="Quantité"
-                      value={ingredient.quantity}
-                      onChange={(e) => handleIngredientChange(index, 'quantity', e.target.value)}
-                      className="w-24"
-                    />
-                    <Input
-                      placeholder="Unité"
-                      value={ingredient.unit}
-                      onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
-                      className="w-20"
-                    />
-                    {ingredients.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveIngredient(index)}
-                      >
-                        <X className="size-4" />
-                      </Button>
-                    )}
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={applyContributionsToMacros}>
+                      Calculer les macros
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={handleAddIngredient}>
+                      <Plus className="size-4" />
+                    </Button>
                   </div>
-                ))}
+                </div>
+                {ingredients.map((ingredient, index) => {
+                  const contribution = computeContribution(ingredient)
+                  return (
+                    <div key={index} className="space-y-1">
+                      <div className="flex gap-2">
+                        <Popover
+                          open={openIngredientRow === index}
+                          onOpenChange={(open) => {
+                            setOpenIngredientRow(open ? index : null)
+                            setIngredientQuery(open ? ingredient.name : '')
+                          }}
+                        >
+                          <PopoverTrigger asChild>
+                            <Input
+                              placeholder="Ingrédient (recherchez dans la liste ou saisissez librement)"
+                              value={ingredient.name}
+                              onChange={(e) => {
+                                handleIngredientChange(index, 'name', e.target.value)
+                                setOpenIngredientRow(index)
+                                setIngredientQuery(e.target.value)
+                              }}
+                              onFocus={() => {
+                                setOpenIngredientRow(index)
+                                setIngredientQuery(ingredient.name)
+                              }}
+                              className="flex-1"
+                            />
+                          </PopoverTrigger>
+                          <PopoverContent className="p-0 w-[300px]" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
+                            <Command shouldFilter={false}>
+                              <CommandList>
+                                <CommandEmpty>Aucun ingrédient trouvé, saisie libre possible.</CommandEmpty>
+                                <CommandGroup>
+                                  {ingredientResults.map((option) => (
+                                    <CommandItem
+                                      key={option.id}
+                                      value={option.id}
+                                      onSelect={() => selectIngredientOption(index, option)}
+                                    >
+                                      <div className="flex flex-col">
+                                        <span>{option.name}</span>
+                                        <span className="text-xs text-muted-foreground">
+                                          {option.calories} kcal / 100{option.unit}
+                                        </span>
+                                      </div>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        <Input
+                          placeholder="Quantité"
+                          value={ingredient.quantity}
+                          onChange={(e) => handleIngredientChange(index, 'quantity', e.target.value)}
+                          className="w-24"
+                        />
+                        <Input
+                          placeholder="Unité"
+                          value={ingredient.unit}
+                          onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
+                          className="w-20"
+                        />
+                        {ingredients.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveIngredient(index)}
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        )}
+                      </div>
+                      {contribution && (
+                        <p className="text-xs text-muted-foreground pl-1">
+                          ≈ {contribution.calories} kcal · {contribution.protein}g prot. · {contribution.carbs}g gluc. · {contribution.fat}g lip.
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
 
               {/* Macros */}
@@ -419,7 +579,7 @@ export function CuisinePage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 @2xl/main:grid-cols-2 @4xl/main:grid-cols-3">
           {filteredRecipes.map(recipe => (
             <Card key={recipe.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>

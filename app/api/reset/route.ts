@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { removeStoredFiles } from "@/lib/projects/storage"
 
 export async function POST() {
   try {
@@ -20,9 +21,28 @@ export async function POST() {
       return NextResponse.json({ error: "Utilisateur non trouvé" }, { status: 404 })
     }
 
+    // Fichiers joints aux projets et tâches : leurs lignes partent en cascade, pas les fichiers du disque
+    // (y compris ceux déposés par les membres de mes voyages partagés, supprimés avec eux)
+    const attachments = await prisma.attachment.findMany({ where: { OR: [{ userId: user.id }, { trip: { userId: user.id } }] }, select: { storageKey: true } })
+    await removeStoredFiles(attachments.map((a) => a.storageKey))
+
     // Supprimer toutes les données de l'utilisateur
     // Les cascades dans le schéma Prisma s'occuperont de supprimer toutes les relations
     await prisma.$transaction([
+      prisma.attachment.deleteMany({ where: { userId: user.id } }),
+      prisma.projectActivity.deleteMany({ where: { userId: user.id } }),
+      prisma.projectTemplate.deleteMany({ where: { userId: user.id } }),
+      prisma.savedView.deleteMany({ where: { userId: user.id } }),
+      prisma.budgetEntry.deleteMany({ where: { userId: user.id } }),
+      prisma.budgetCategory.deleteMany({ where: { userId: user.id } }),
+      prisma.budgetSettings.deleteMany({ where: { userId: user.id } }),
+      prisma.wishlistItem.deleteMany({ where: { userId: user.id } }),
+      prisma.wishlistList.deleteMany({ where: { userId: user.id } }),
+      prisma.trip.deleteMany({ where: { userId: user.id } }),
+      prisma.tripMember.deleteMany({ where: { userId: user.id } }),
+      prisma.tripDocumentLink.deleteMany({ where: { userId: user.id } }),
+      prisma.travelDocument.deleteMany({ where: { userId: user.id } }),
+      prisma.friendship.deleteMany({ where: { OR: [{ requesterId: user.id }, { addresseeId: user.id }] } }),
       // Supprimer les routines
       prisma.routineLog.deleteMany({ where: { userId: user.id } }),
       prisma.routineAction.deleteMany({ where: { userId: user.id } }),

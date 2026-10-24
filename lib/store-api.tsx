@@ -1,6 +1,6 @@
 "use client"
 
-import { useContext, createContext, useReducer, useEffect, useState, ReactNode, useCallback } from 'react'
+import { useContext, createContext, useReducer, useEffect, useState, ReactNode, useCallback, useRef } from 'react'
 import {
   AppState,
   AppAction,
@@ -19,8 +19,11 @@ import {
   UserSettings,
   FitnessProfile,
   Note,
+  Meal,
+  Recipe,
 } from './types'
 import * as api from './api'
+import { useLiveRefresh } from './live-sync'
 
 // Initial state
 export const defaultState: AppState = {
@@ -41,6 +44,7 @@ export const defaultState: AppState = {
   dailyNutrition: [],
   dashboardWidgets: [],
   notes: [],
+  recipes: [],
   settings: {
     theme: "light",
     dayStartHour: 6,
@@ -56,6 +60,8 @@ interface AppContextType {
   state: AppState
   dispatch: React.Dispatch<AppAction>
   loadData: () => Promise<void>
+  // Rechargement en arrière-plan, sans écran de chargement (après un import, une duplication…)
+  refresh: () => Promise<void>
   isLoading: boolean
   // API actions for routines
   addRoutineAction: (action: Omit<RoutineAction, 'id' | 'createdAt'>) => Promise<void>
@@ -68,23 +74,25 @@ interface AppContextType {
   deleteNightRoutineAction: (id: string) => Promise<void>
   logNightRoutine: (actionId: string, date: string, completed: boolean) => Promise<void>
   // API actions for tasks
-  addTask: (task: Omit<Task, 'id' | 'createdAt'>) => Promise<void>
+  addTask: (task: Omit<Task, 'id' | 'createdAt'>) => Promise<Task>
   updateTask: (task: Task) => Promise<void>
   deleteTask: (id: string) => Promise<void>
+  reorderTasks: (items: { id: string; order: number }[]) => Promise<void>
   // API actions for missions
-  addMission: (mission: Omit<Mission, 'id' | 'createdAt'>) => Promise<void>
+  addMission: (mission: Omit<Mission, 'id' | 'createdAt'>) => Promise<Mission>
   updateMission: (mission: Mission) => Promise<void>
   deleteMission: (id: string) => Promise<void>
   // API actions for projects
-  addProject: (project: Omit<Project, 'id' | 'createdAt'>) => Promise<void>
+  addProject: (project: Omit<Project, 'id' | 'createdAt'>) => Promise<Project>
   updateProject: (project: Project) => Promise<void>
   deleteProject: (id: string) => Promise<void>
+  reorderProjects: (items: { id: string; order: number }[]) => Promise<void>
   // API actions for sleep
   addSleepLog: (sleepLog: Omit<SleepLog, 'id'>) => Promise<void>
   updateSleepLog: (sleepLog: SleepLog) => Promise<void>
   deleteSleepLog: (id: string) => Promise<void>
   // API actions for workouts
-  addWorkout: (workout: Omit<WorkoutSession, 'id'>) => Promise<void>
+  addWorkout: (workout: Omit<WorkoutSession, 'id'>) => Promise<WorkoutSession>
   updateWorkout: (workout: WorkoutSession) => Promise<void>
   deleteWorkout: (id: string) => Promise<void>
   // API actions for workout programs
@@ -99,6 +107,10 @@ interface AppContextType {
   deleteCalendarEvent: (id: string) => Promise<void>
   // API actions for fitness profile
   updateFitnessProfile: (profile: any) => Promise<void>
+  // API actions for daily nutrition / meals
+  addMeal: (date: string, meal: Omit<Meal, 'id'>) => Promise<void>
+  updateMeal: (meal: Meal) => Promise<void>
+  deleteMeal: (mealId: string) => Promise<void>
   // API actions for notes
   addNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   updateNote: (note: Note) => Promise<void>
@@ -181,6 +193,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, tasks: state.tasks.map(t => t.id === action.payload.id ? action.payload : t) }
     case "DELETE_TASK":
       return { ...state, tasks: state.tasks.filter(t => t.id !== action.payload) }
+    case "PATCH_TASKS": {
+      const changes = new Map(action.payload.map(p => [p.id, p.changes]))
+      return { ...state, tasks: state.tasks.map(t => changes.has(t.id) ? { ...t, ...changes.get(t.id) } : t) }
+    }
 
     // Missions
     case "ADD_MISSION":
@@ -195,8 +211,29 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, projects: [...state.projects, action.payload] }
     case "UPDATE_PROJECT":
       return { ...state, projects: state.projects.map(p => p.id === action.payload.id ? action.payload : p) }
-    case "DELETE_PROJECT":
-      return { ...state, projects: state.projects.filter(p => p.id !== action.payload) }
+    case "DELETE_PROJECT": {
+      // Les sous-projets et leurs tâches partent à la corbeille avec leur parent
+      const removed = new Set([action.payload])
+      let grew = true
+      while (grew) {
+        grew = false
+        for (const p of state.projects) {
+          if (p.parentId && removed.has(p.parentId) && !removed.has(p.id)) {
+            removed.add(p.id)
+            grew = true
+          }
+        }
+      }
+      return {
+        ...state,
+        projects: state.projects.filter(p => !removed.has(p.id)),
+        tasks: state.tasks.filter(t => !t.projectId || !removed.has(t.projectId)),
+      }
+    }
+    case "PATCH_PROJECTS": {
+      const changes = new Map(action.payload.map(p => [p.id, p.changes]))
+      return { ...state, projects: state.projects.map(p => changes.has(p.id) ? { ...p, ...changes.get(p.id) } : p) }
+    }
 
     // Sleep
     case "ADD_SLEEP_LOG":
@@ -255,6 +292,21 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case "UPDATE_FITNESS_PROFILE":
       return { ...state, fitnessProfile: action.payload }
 
+    // Daily Nutrition
+    case "ADD_DAILY_NUTRITION":
+      return { ...state, dailyNutrition: [...state.dailyNutrition, action.payload] }
+    case "UPDATE_DAILY_NUTRITION": {
+      const exists = state.dailyNutrition.some(n => n.id === action.payload.id)
+      return {
+        ...state,
+        dailyNutrition: exists
+          ? state.dailyNutrition.map(n => n.id === action.payload.id ? action.payload : n)
+          : [...state.dailyNutrition, action.payload],
+      }
+    }
+    case "DELETE_DAILY_NUTRITION":
+      return { ...state, dailyNutrition: state.dailyNutrition.filter(n => n.id !== action.payload) }
+
     // Settings
     case "UPDATE_SETTINGS":
       return { ...state, settings: { ...state.settings, ...action.payload } }
@@ -288,14 +340,84 @@ function transformApiData(data: any): any {
   return data
 }
 
+const isoOrUndefined = (value: any) => (value ? new Date(value).toISOString() : undefined)
+
+// Forme complète d'une tâche venant de l'API (champs JSON et dates normalisés)
+export function normalizeTask(task: any): Task {
+  return {
+    id: task.id,
+    title: task.title,
+    description: task.description ?? undefined,
+    status: task.status,
+    priority: task.priority,
+    dueDate: task.dueDate ?? undefined,
+    startDate: task.startDate ?? undefined,
+    missionId: task.missionId ?? undefined,
+    projectId: task.projectId ?? undefined,
+    notes: task.notes ?? undefined,
+    checklist: Array.isArray(task.checklist) ? task.checklist : [],
+    links: Array.isArray(task.links) ? task.links : [],
+    dependsOn: Array.isArray(task.dependsOn) ? task.dependsOn : [],
+    recurrence: task.recurrence ?? null,
+    order: typeof task.order === "number" ? task.order : 0,
+    showInCalendar: task.showInCalendar === true,
+    completedAt: task.completedAt ?? undefined,
+    createdAt: new Date(task.createdAt).toISOString(),
+    updatedAt: isoOrUndefined(task.updatedAt),
+  }
+}
+
+export function normalizeProject(project: any): Project {
+  return {
+    id: project.id,
+    title: project.title,
+    description: project.description ?? undefined,
+    objectives: Array.isArray(project.objectives) ? project.objectives : [],
+    deadline: isoOrUndefined(project.deadline),
+    completedAt: isoOrUndefined(project.completedAt),
+    // Sans ces champs, les sous-projets redevenaient des projets racines après un rechargement
+    parentId: project.parentId ?? null,
+    links: Array.isArray(project.links) ? project.links : [],
+    status: project.status ?? null,
+    notes: project.notes ?? undefined,
+    priority: project.priority ?? null,
+    startDate: project.startDate ?? undefined,
+    category: project.category ?? undefined,
+    favorite: project.favorite === true,
+    showInCalendar: project.showInCalendar === true,
+    order: typeof project.order === "number" ? project.order : 0,
+    tasks: [], // Tasks are loaded separately in state.tasks with projectId
+    createdAt: new Date(project.createdAt).toISOString(),
+    updatedAt: isoOrUndefined(project.updatedAt),
+  }
+}
+
 // Provider component
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(appReducer, defaultState)
+  const [state, rawDispatch] = useReducer(appReducer, defaultState)
+  // État courant lisible depuis les actions (mises à jour optimistes : on garde l'ancienne valeur en cas d'échec)
+  const stateRef = useRef(state)
+  stateRef.current = state
   const [isLoading, setIsLoading] = useState(true)
+  // Heure de la dernière modification locale : un rafraîchissement lancé avant ne doit pas
+  // ramener l'ancien état à l'écran
+  const lastLocalChange = useRef(0)
+  const dispatch = useCallback((action: AppAction) => {
+    if (action.type !== "LOAD_STATE") lastLocalChange.current = Date.now()
+    rawDispatch(action)
+  }, [])
 
-  // Load all data from APIs
-  const loadData = useCallback(async () => {
-    setIsLoading(true)
+  // Load all data from APIs. silent = rafraîchissement en arrière-plan (pas d'écran de chargement,
+  // et en cas d'échec réseau on garde les données affichées plutôt que de les vider)
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true)
+    const startedAt = Date.now()
+    let failed = false
+    // En chargement silencieux, une requête échouée annule la mise à jour au lieu d'afficher une liste vide
+    const fallback = <T,>(value: T) => (): T => {
+      failed = true
+      return value
+    }
     try {
       const [
         routineActions,
@@ -312,21 +434,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
         calendarEvents,
         fitnessProfile,
         notes,
+        dailyNutrition,
+        recipes,
       ] = await Promise.all([
-        api.routinesApi.getActions().catch(() => []) as Promise<any[]>,
-        api.routinesApi.getLogs().catch(() => []) as Promise<any[]>,
-        api.nightRoutinesApi.getActions().catch(() => []) as Promise<any[]>,
-        api.nightRoutinesApi.getLogs().catch(() => []) as Promise<any[]>,
-        api.tasksApi.getAll().catch(() => []) as Promise<any[]>,
-        api.missionsApi.getAll().catch(() => []) as Promise<any[]>,
-        api.projectsApi.getAll().catch(() => []) as Promise<any[]>,
-        api.sleepApi.getAll().catch(() => []) as Promise<any[]>,
-        api.workoutsApi.getAll().catch(() => []) as Promise<any[]>,
-        api.workoutProgramsApi.getAll().catch(() => []) as Promise<any[]>,
-        api.dashboardApi.getWidgets().catch(() => []) as Promise<any[]>,
-        api.calendarApi.getAll().catch(() => []) as Promise<any[]>,
-        api.fitnessProfileApi.get().catch(() => null) as Promise<any>,
-        api.notesApi.getAll().catch(() => []) as Promise<any[]>,
+        api.routinesApi.getActions().catch(fallback([])) as Promise<any[]>,
+        api.routinesApi.getLogs().catch(fallback([])) as Promise<any[]>,
+        api.nightRoutinesApi.getActions().catch(fallback([])) as Promise<any[]>,
+        api.nightRoutinesApi.getLogs().catch(fallback([])) as Promise<any[]>,
+        api.tasksApi.getAll().catch(fallback([])) as Promise<any[]>,
+        api.missionsApi.getAll().catch(fallback([])) as Promise<any[]>,
+        api.projectsApi.getAll().catch(fallback([])) as Promise<any[]>,
+        api.sleepApi.getAll().catch(fallback([])) as Promise<any[]>,
+        api.workoutsApi.getAll().catch(fallback([])) as Promise<any[]>,
+        api.workoutProgramsApi.getAll().catch(fallback([])) as Promise<any[]>,
+        api.dashboardApi.getWidgets().catch(fallback([])) as Promise<any[]>,
+        api.calendarApi.getAll().catch(fallback([])) as Promise<any[]>,
+        api.fitnessProfileApi.get().catch(fallback(null)) as Promise<any>,
+        api.notesApi.getAll().catch(fallback([])) as Promise<any[]>,
+        api.dailyNutritionApi.getAll().catch(fallback([])) as Promise<any[]>,
+        api.recipesApi.getAll().catch(fallback([])) as Promise<any[]>,
       ])
 
       // Transform Prisma data to match our types
@@ -356,16 +482,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           date: log.date,
           completed: log.completed,
         })),
-        tasks: tasks.map((task: any) => ({
-          id: task.id,
-          title: task.title,
-          description: task.description,
-          status: task.status,
-          priority: task.priority,
-          dueDate: task.dueDate,
-          projectId: task.projectId,
-          createdAt: new Date(task.createdAt).toISOString(),
-        })),
+        tasks: tasks.map(normalizeTask),
         missions: missions.map((mission: any) => ({
           id: mission.id,
           title: mission.title,
@@ -387,18 +504,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           })) : [],
           createdAt: new Date(mission.createdAt).toISOString(),
         })),
-        projects: projects.map((project: any) => ({
-          id: project.id,
-          name: project.title,
-          title: project.title,
-          description: project.description,
-          color: "#3B82F6", // Default color since not in database
-          objectives: Array.isArray(project.objectives) ? project.objectives : [],
-          deadline: project.deadline ? new Date(project.deadline).toISOString() : undefined,
-          completedAt: project.completedAt ? new Date(project.completedAt).toISOString() : undefined,
-          tasks: [], // Tasks are loaded separately in state.tasks with projectId
-          createdAt: new Date(project.createdAt).toISOString(),
-        })),
+        projects: projects.map(normalizeProject),
         sleepLogs: sleepLogs.map((log: any) => ({
           id: log.id,
           date: log.date,
@@ -444,6 +550,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           order: widget.order,
           width: widget.width,
           height: widget.height,
+          row: widget.row,
+          col: widget.col,
         })),
         calendarEvents: calendarEvents.map((event: any) => ({
           id: event.id,
@@ -467,6 +575,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           goal: fitnessProfile.goal,
           activityLevel: fitnessProfile.activityLevel,
           targetWeight: fitnessProfile.targetWeight,
+          customCalories: fitnessProfile.customCalories,
+          customProtein: fitnessProfile.customProtein,
+          customCarbs: fitnessProfile.customCarbs,
+          customFats: fitnessProfile.customFats,
         } : null,
         notes: notes.map((note: any) => ({
           id: note.id,
@@ -477,20 +589,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
           createdAt: new Date(note.createdAt).toISOString(),
           updatedAt: new Date(note.updatedAt).toISOString(),
         })),
+        dailyNutrition: dailyNutrition.map((day: any) => ({
+          id: day.id,
+          date: day.date,
+          calories: day.calories,
+          protein: day.protein,
+          carbs: day.carbs,
+          fats: day.fats,
+          meals: Array.isArray(day.meals) ? day.meals.map((meal: any) => ({
+            id: meal.id,
+            name: meal.name,
+            time: meal.time,
+            calories: meal.calories,
+            protein: meal.protein,
+            carbs: meal.carbs,
+            fats: meal.fats,
+            recipeId: meal.recipeId,
+          })) : [],
+        })),
+        recipes: recipes.map((recipe: any) => ({
+          id: recipe.id,
+          name: recipe.name,
+          description: recipe.description,
+          ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
+          protein: recipe.protein,
+          carbs: recipe.carbs,
+          fat: recipe.fat,
+          calories: recipe.calories,
+          prepTime: recipe.prepTime,
+          cookTime: recipe.cookTime,
+          servings: recipe.servings,
+          category: recipe.category,
+          imageUrl: recipe.imageUrl,
+          createdAt: new Date(recipe.createdAt).toISOString(),
+          updatedAt: new Date(recipe.updatedAt).toISOString(),
+        })),
       }
 
+      // Rafraîchissement silencieux : ignoré si une requête a échoué, ou si l'utilisateur a modifié
+      // quelque chose entre-temps (le prochain rafraîchissement inclura sa modification)
+      if (silent && (failed || lastLocalChange.current > startedAt)) return
       dispatch({ type: "LOAD_STATE", payload: transformedState as AppState })
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
-      setIsLoading(false)
+      if (!silent) setIsLoading(false)
     }
-  }, [])
+  }, [dispatch])
 
   // Load data on mount
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Temps réel entre appareils : rechargement silencieux au retour sur l'app et toutes les 30 s
+  useLiveRefresh(() => loadData(true))
 
   // Apply theme effect
   useEffect(() => {
@@ -598,20 +751,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Tasks
   const addTask = useCallback(async (task: Omit<Task, 'id' | 'createdAt'>) => {
     try {
-      const newTask = await api.tasksApi.create(task)
-      dispatch({ type: "ADD_TASK", payload: transformApiData(newTask) })
+      const created = normalizeTask(await api.tasksApi.create(task))
+      dispatch({ type: "ADD_TASK", payload: created })
+      return created
     } catch (error) {
       console.error('Error adding task:', error)
       throw error
     }
   }, [])
 
+  // Affichée tout de suite (glisser-déposer, cases à cocher), puis remplacée par la réponse du serveur
   const updateTask = useCallback(async (task: Task) => {
+    const previous = stateRef.current.tasks.find(t => t.id === task.id)
+    dispatch({ type: "UPDATE_TASK", payload: task })
     try {
-      const updated = await api.tasksApi.update(task)
-      dispatch({ type: "UPDATE_TASK", payload: transformApiData(updated) })
+      const updated: any = await api.tasksApi.update(task)
+      dispatch({ type: "UPDATE_TASK", payload: normalizeTask(updated) })
+      // Tâche récurrente terminée : le serveur a créé l'occurrence suivante
+      if (updated.nextOccurrence) dispatch({ type: "ADD_TASK", payload: normalizeTask(updated.nextOccurrence) })
     } catch (error) {
+      if (previous) dispatch({ type: "UPDATE_TASK", payload: previous })
       console.error('Error updating task:', error)
+      throw error
+    }
+  }, [])
+
+  const reorderTasks = useCallback(async (items: { id: string; order: number }[]) => {
+    if (!items.length) return
+    dispatch({ type: "PATCH_TASKS", payload: items.map(({ id, order }) => ({ id, changes: { order } })) })
+    try {
+      await api.tasksApi.reorder(items)
+    } catch (error) {
+      console.error('Error reordering tasks:', error)
+      throw error
+    }
+  }, [])
+
+  const reorderProjects = useCallback(async (items: { id: string; order: number }[]) => {
+    if (!items.length) return
+    dispatch({ type: "PATCH_PROJECTS", payload: items.map(({ id, order }) => ({ id, changes: { order } })) })
+    try {
+      await api.projectsApi.reorder(items)
+    } catch (error) {
+      console.error('Error reordering projects:', error)
       throw error
     }
   }, [])
@@ -630,7 +812,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addMission = useCallback(async (mission: Omit<Mission, 'id' | 'createdAt'>) => {
     try {
       const newMission = await api.missionsApi.create(mission)
-      dispatch({ type: "ADD_MISSION", payload: transformApiData(newMission) })
+      const transformed = transformApiData(newMission) as Mission
+      dispatch({ type: "ADD_MISSION", payload: transformed })
+      return transformed
     } catch (error) {
       console.error('Error adding mission:', error)
       throw error
@@ -660,8 +844,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Projects
   const addProject = useCallback(async (project: Omit<Project, 'id' | 'createdAt'>) => {
     try {
-      const newProject = await api.projectsApi.create(project)
-      dispatch({ type: "ADD_PROJECT", payload: transformApiData(newProject) })
+      const created = normalizeProject(await api.projectsApi.create(project))
+      dispatch({ type: "ADD_PROJECT", payload: created })
+      return created
     } catch (error) {
       console.error('Error adding project:', error)
       throw error
@@ -669,10 +854,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const updateProject = useCallback(async (project: Project) => {
+    const previous = stateRef.current.projects.find(p => p.id === project.id)
+    dispatch({ type: "UPDATE_PROJECT", payload: project })
     try {
       const updated = await api.projectsApi.update(project)
-      dispatch({ type: "UPDATE_PROJECT", payload: transformApiData(updated) })
+      dispatch({ type: "UPDATE_PROJECT", payload: normalizeProject(updated) })
     } catch (error) {
+      if (previous) dispatch({ type: "UPDATE_PROJECT", payload: previous })
       console.error('Error updating project:', error)
       throw error
     }
@@ -725,6 +913,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const newWorkout = await api.workoutsApi.create(workout)
       dispatch({ type: "ADD_WORKOUT", payload: newWorkout as WorkoutSession })
+      return newWorkout as WorkoutSession
     } catch (error) {
       console.error('Error adding workout:', error)
       throw error
@@ -845,6 +1034,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Daily Nutrition / Meals
+  const addMeal = useCallback(async (date: string, meal: Omit<Meal, 'id'>) => {
+    try {
+      const updatedDay = await api.dailyNutritionApi.addMeal({ date, ...meal })
+      dispatch({ type: "UPDATE_DAILY_NUTRITION", payload: updatedDay as any })
+    } catch (error) {
+      console.error('Error adding meal:', error)
+      throw error
+    }
+  }, [])
+
+  const updateMeal = useCallback(async (meal: Meal) => {
+    try {
+      const updatedDay = await api.dailyNutritionApi.updateMeal(meal)
+      dispatch({ type: "UPDATE_DAILY_NUTRITION", payload: updatedDay as any })
+    } catch (error) {
+      console.error('Error updating meal:', error)
+      throw error
+    }
+  }, [])
+
+  const deleteMeal = useCallback(async (mealId: string) => {
+    try {
+      const result = await api.dailyNutritionApi.deleteMeal(mealId) as any
+      if (result?.deletedDailyNutritionId) {
+        dispatch({ type: "DELETE_DAILY_NUTRITION", payload: result.deletedDailyNutritionId })
+      } else {
+        dispatch({ type: "UPDATE_DAILY_NUTRITION", payload: result })
+      }
+    } catch (error) {
+      console.error('Error deleting meal:', error)
+      throw error
+    }
+  }, [])
+
   // Notes
   const addNote = useCallback(async (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
@@ -876,11 +1100,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const refresh = useCallback(() => loadData(true), [loadData])
+
   const contextValue: AppContextType = {
     state,
     dispatch,
     loadData,
+    refresh,
     isLoading,
+    reorderTasks,
+    reorderProjects,
     // Routine actions
     addRoutineAction,
     updateRoutineAction,
@@ -923,6 +1152,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteCalendarEvent,
     // Fitness profile
     updateFitnessProfile,
+    // Daily nutrition / meals
+    addMeal,
+    updateMeal,
+    deleteMeal,
     // Notes
     addNote,
     updateNote,

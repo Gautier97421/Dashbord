@@ -1,0 +1,98 @@
+# DashLife sur un VPS : app + PostgreSQL + Caddy (HTTPS automatique) + tâches planifiées.
+# Voir DEPLOY-VPS.md. Lancement :
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+name: dashlife
+
+# Journaux de chaque service : 3 fichiers de 10 Mo au plus (sinon ils remplissent le disque avec le temps)
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:16.15-alpine
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER: dashlife
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant dans .env.production}
+      POSTGRES_DB: dashlife
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Aucun port publié : la base n'est joignable que par l'app, sur le réseau interne
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dashlife -d dashlife"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    logging: *logging
+    env_file: ${ENV_FILE:-.env.production}
+    environment:
+      DATABASE_URL: postgresql://dashlife:${POSTGRES_PASSWORD}@postgres:5432/dashlife
+      NEXTAUTH_URL: https://${DOMAIN:?DOMAIN manquant dans .env.production}
+      NODE_ENV: production
+    # Fichiers joints aux projets et tâches (à inclure dans les sauvegardes)
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Pas de port publié : seul Caddy reçoit le trafic d'Internet
+    networks: [backend, web]
+
+  caddy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    logging: *logging
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL manquant dans .env.production}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [app]
+    networks: [web]
+
+  # Tâches planifiées (workflows automatiques) : appel interne de /api/cron/run toutes les 5 minutes
+  cron:
+    image: curlimages/curl:8.22.0
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      CRON_SECRET: ${CRON_SECRET:?CRON_SECRET manquant dans .env.production}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        while true; do
+        sleep 300;
+        curl -fsS -m 120 -o /dev/null -X POST -H "Authorization: Bearer $$CRON_SECRET" http://app:3000/api/cron/run || echo "cron: échec de l'appel";
+        done
+    depends_on: [app]
+    networks: [backend]
+
+networks:
+  # Réseau interne sans accès à Internet : base de données et tâches planifiées
+  backend:
+    internal: true
+  # Réseau ouvert : Caddy, et l'app pour joindre Gmail, l'API Claude, etc.
+  web: {}
+
+volumes:
+  postgres_data:
+  uploads_data:
+  caddy_data:
+  caddy_config:

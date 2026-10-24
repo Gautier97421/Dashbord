@@ -105,6 +105,7 @@ export const tasksApi = {
   create: (task: any) => api.post('/tasks', task),
   update: (task: any) => api.put('/tasks', task),
   delete: (id: string) => api.delete('/tasks', id),
+  reorder: (items: { id: string; order: number }[]) => api.post('/tasks/reorder', { items }),
 }
 
 export const projectsApi = {
@@ -112,6 +113,11 @@ export const projectsApi = {
   create: (project: any) => api.post('/projects', project),
   update: (project: any) => api.put('/projects', project),
   delete: (id: string) => api.delete('/projects', id),
+  reorder: (items: { id: string; order: number }[]) => api.post('/projects/reorder', { items }),
+  duplicate: (id: string) => api.post<{ projectId: string }>('/projects/duplicate', { id }),
+  fromTemplate: (body: { builtin?: string; templateId?: string; title?: string; startDate?: string; parentId?: string | null }) =>
+    api.post<{ projectId: string }>('/projects/from-template', body),
+  import: (data: unknown) => api.post<{ projects: number; tasks: number; comments: number; templates: number }>('/projects/import', data),
 }
 
 export const sleepApi = {
@@ -158,4 +164,22 @@ export const notesApi = {
   create: (note: any) => api.post('/notes', note),
   update: (note: any) => api.put('/notes', note),
   delete: (id: string) => api.delete('/notes', id),
+}
+
+export const dailyNutritionApi = {
+  getAll: () => api.get('/daily-nutrition'),
+  addMeal: (meal: any) => api.post('/daily-nutrition/meals', meal),
+  updateMeal: (meal: any) => api.put('/daily-nutrition/meals', meal),
+  deleteMeal: (id: string) => api.delete('/daily-nutrition/meals', id),
+}
+
+export const recipesApi = {
+  getAll: () => api.get('/recipes'),
+  create: (recipe: any) => api.post('/recipes', recipe),
+  update: (recipe: any) => api.put('/recipes', recipe),
+  delete: (id: string) => api.delete('/recipes', id),
+}
+
+export const ingredientsApi = {
+  search: (query: string) => api.get(`/ingredients?q=${encodeURIComponent(query)}`),
 }

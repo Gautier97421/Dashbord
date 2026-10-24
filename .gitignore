@@ -18,6 +18,12 @@ yarn-error.log*
 
 # env files
 .env*
+# ...sauf les modèles sans secrets
+!.env*.example
+
+# sauvegardes et exports de la base (contiennent toutes les données)
+/backups
+dashlife-local.sql
 
 # vercel
 .vercel
@@ -25,3 +31,5 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# fichiers joints aux projets et tâches (stockage local hors Docker)
+/uploads

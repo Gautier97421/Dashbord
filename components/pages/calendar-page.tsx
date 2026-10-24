@@ -16,14 +16,72 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { ChevronLeft, ChevronRight, Plus, Clock, CheckCircle2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Clock, CheckCircle2, Flag, ListTodo } from "lucide-react"
 import { useApp } from "@/lib/store-api"
-import { generateId, formatDateFr, getToday } from "@/lib/helpers"
+import { generateId, formatDateFr, getToday, toLocalDateString } from "@/lib/helpers"
 import type { CalendarEvent, Priority } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { useIsMobile } from "@/hooks/use-mobile"
+import { DayNumber } from "@/components/month-calendar"
+import { SegmentedTabs } from "@/components/segmented-tabs"
+import { toDay } from "@/lib/projects/core"
+import { requestProjectsTarget } from "@/lib/projects/nav"
 
 type ViewMode = "day" | "week" | "month"
+
+// Tâche ou projet de la section Projets marqué "Afficher dans le calendrier", placé à son échéance
+interface PinnedItem {
+  key: string
+  kind: "task" | "project"
+  id: string
+  title: string
+  done: boolean
+}
+
+function PinnedChip({ item, className }: { item: PinnedItem; className?: string }) {
+  const Icon = item.kind === "project" ? Flag : ListTodo
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-1 truncate rounded border px-1 py-0.5 text-xs",
+        item.done ? "border-transparent bg-muted text-muted-foreground line-through" : "border-warning/30 bg-warning/15 text-warning-foreground dark:text-warning",
+        className
+      )}
+      title={item.kind === "project" ? `Échéance du projet « ${item.title} »` : `Tâche « ${item.title} »`}
+    >
+      <Icon className="size-3 shrink-0" />
+      <span className="truncate">{item.title}</span>
+    </div>
+  )
+}
+
+// Ouvre l'élément dans la section Projets (la page principale y navigue)
+const openPinned = (item: PinnedItem) => requestProjectsTarget(item.kind === "task" ? { taskId: item.id } : { projectId: item.id })
+
+function PinnedList({ items, onOpen }: { items: PinnedItem[]; onOpen?: () => void }) {
+  if (items.length === 0) return null
+  return (
+    <div className="space-y-2">
+      <Label>Projets et tâches</Label>
+      {items.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          onClick={() => {
+            onOpen?.()
+            openPinned(item)
+          }}
+          className="flex w-full items-center gap-2 rounded-lg border p-3 text-left hover:bg-muted/50"
+        >
+          {item.kind === "project" ? <Flag className="size-5 shrink-0 text-warning" /> : <ListTodo className="size-5 shrink-0 text-warning" />}
+          <span className={cn("min-w-0 flex-1 truncate", item.done && "line-through text-muted-foreground")}>
+            {item.kind === "project" ? `Échéance : ${item.title}` : item.title}
+          </span>
+          <span className="shrink-0 text-xs text-muted-foreground">Ouvrir</span>
+        </button>
+      ))}
+    </div>
+  )
+}
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 const MONTHS = [
@@ -44,7 +102,6 @@ export function CalendarPage() {
     completed: false,
   })
 
-  const isMobile = useIsMobile();
 
   const today = getToday()
 
@@ -97,15 +154,31 @@ export function CalendarPage() {
   }, [currentDate])
 
   const getEventsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split("T")[0]
+    const dateStr = toLocalDateString(date)
     return (state.calendarEvents || []).filter((e) => e.date === dateStr)
   }
+
+  const pinnedByDay = useMemo(() => {
+    const map = new Map<string, PinnedItem[]>()
+    const add = (day: string | undefined, item: PinnedItem) => day && map.set(day, [...(map.get(day) || []), item])
+    for (const t of state.tasks) {
+      if (t.showInCalendar) add(toDay(t.dueDate), { key: `t-${t.id}`, kind: "task", id: t.id, title: t.title, done: t.status === "done" })
+    }
+    for (const p of state.projects) {
+      if (p.showInCalendar) add(toDay(p.deadline), { key: `p-${p.id}`, kind: "project", id: p.id, title: p.title, done: !!p.completedAt || p.status === "done" })
+    }
+    return map
+  }, [state.tasks, state.projects])
+
+  // Les échéances sont des jours locaux : la case du 23 affiche ce qui est dû le 23 (date locale, pas UTC)
+  const getPinnedForDate = (date: Date) => pinnedByDay.get(toLocalDateString(date)) || []
 
   const navigateMonth = (direction: number) => {
     setCurrentDate((prev) => {
       const newDate = new Date(prev)
       if (viewMode === "month") {
-        newDate.setMonth(prev.getMonth() + direction)
+        // Le 1er du mois : depuis un 31, setMonth(+1) sauterait au mois d'après
+        return new Date(prev.getFullYear(), prev.getMonth() + direction, 1)
       } else if (viewMode === "week") {
         newDate.setDate(prev.getDate() + direction * 7)
       } else {
@@ -169,33 +242,36 @@ export function CalendarPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border">
-            {(["day", "week", "month"] as ViewMode[]).map((mode) => (
-              <Button
-                key={mode}
-                variant={viewMode === mode ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode(mode)}
-                className="rounded-none first:rounded-l-lg last:rounded-r-lg text-xs sm:text-sm px-2 sm:px-3"
-              >
-                {mode === "day" ? "Jour" : mode === "week" ? (isMobile ? null : "Sem.") : "Mois"}
-              </Button>
-            ))}
-          </div>
+          <SegmentedTabs
+            data-tour="calendar-views"
+            label="Vue du calendrier"
+            tabs={[
+              { value: "day", label: "Jour" },
+              { value: "week", label: "Semaine" },
+              { value: "month", label: "Mois" },
+            ]}
+            value={viewMode}
+            onChange={setViewMode}
+          />
         </div>
       </div>
 
       {/* Navigation */}
-      <div className="flex items-center justify-between">
-        <Button variant="outline" size="icon" onClick={() => navigateMonth(-1)}>
+      <div className="flex items-center justify-between gap-2">
+        <Button variant="outline" size="icon" className="shrink-0" onClick={() => navigateMonth(-1)} aria-label="Précédent">
           <ChevronLeft className="size-4" />
         </Button>
-        <h2 className="text-lg font-semibold">
+        <h2 className="min-w-0 truncate text-center text-base font-semibold sm:text-lg">
           {MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
         </h2>
-        <Button variant="outline" size="icon" onClick={() => navigateMonth(1)}>
-          <ChevronRight className="size-4" />
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())}>
+            Aujourd&apos;hui
+          </Button>
+          <Button variant="outline" size="icon" onClick={() => navigateMonth(1)} aria-label="Suivant">
+            <ChevronRight className="size-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Month View */}
@@ -217,8 +293,13 @@ export function CalendarPage() {
             {/* Calendar grid */}
             <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
               {calendarDays.map(({ date, isCurrentMonth }, index) => {
-                const dateStr = date.toISOString().split("T")[0]
+                const dateStr = toLocalDateString(date)
                 const events = getEventsForDate(date)
+                const pinned = getPinnedForDate(date)
+                // Deux lignes par case : d'abord les projets et tâches importants
+                const shownPinned = pinned.slice(0, 2)
+                const shownEvents = events.slice(0, 2 - shownPinned.length)
+                const hidden = pinned.length + events.length - shownPinned.length - shownEvents.length
                 const isToday = dateStr === today
                 const isSelected = dateStr === selectedDate
 
@@ -233,22 +314,18 @@ export function CalendarPage() {
                       <button
                         onClick={() => setSelectedDate(dateStr)}
                         className={cn(
-                          "min-h-16 sm:min-h-24 p-0.5 sm:p-1 text-left rounded-lg border transition-colors hover:bg-muted/50",
+                          "@container min-w-0 min-h-16 sm:min-h-24 p-0.5 sm:p-1 text-left rounded-lg border transition-colors hover:bg-muted/50",
                           !isCurrentMonth && "opacity-40",
                           isToday && "border-primary bg-primary/5",
                           isSelected && "ring-2 ring-primary"
                         )}
                       >
-                        <span
-                          className={cn(
-                            "inline-flex size-5 sm:size-6 items-center justify-center rounded-full text-xs sm:text-sm",
-                            isToday && "bg-primary text-primary-foreground font-medium"
-                          )}
-                        >
-                          {date.getDate()}
-                        </span>
+                        <DayNumber day={date.getDate()} isToday={isToday} />
                         <div className="mt-0.5 sm:mt-1 space-y-0.5 hidden sm:block">
-                          {events.slice(0, 2).map((event) => (
+                          {shownPinned.map((item) => (
+                            <PinnedChip key={item.key} item={item} />
+                          ))}
+                          {shownEvents.map((event) => (
                             <div
                               key={event.id}
                               className={cn(
@@ -261,15 +338,18 @@ export function CalendarPage() {
                               {event.title}
                             </div>
                           ))}
-                          {events.length > 2 && (
+                          {hidden > 0 && (
                             <div className="text-xs text-muted-foreground px-1">
-                              +{events.length - 2} autres
+                              +{hidden} autres
                             </div>
                           )}
                         </div>
                         {/* Mobile event indicator */}
                         <div className="flex gap-0.5 sm:hidden mt-0.5">
-                          {events.slice(0, 3).map((event) => (
+                          {pinned.slice(0, 2).map((item) => (
+                            <div key={item.key} className={cn("size-1.5 rounded-full", item.done ? "bg-muted-foreground" : "bg-warning")} />
+                          ))}
+                          {events.slice(0, 3 - Math.min(pinned.length, 2)).map((event) => (
                             <div
                               key={event.id}
                               className={cn(
@@ -287,11 +367,13 @@ export function CalendarPage() {
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
-                        <DialogTitle>{formatDateFr(dateStr, "full")}</DialogTitle>
+                        <DialogTitle>{formatDateFr(`${dateStr}T00:00`, "full")}</DialogTitle>
                         <DialogDescription>
                           Gérez les événements de cette journée
                         </DialogDescription>
                       </DialogHeader>
+
+                      <PinnedList items={pinned} onOpen={() => setIsDialogOpen(false)} />
 
                       {/* Existing events */}
                       {events.length > 0 && (
@@ -397,8 +479,9 @@ export function CalendarPage() {
           <CardContent className="p-4">
             <div className="grid grid-cols-4 gap-2">
               {weekDays.map((date) => {
-                const dateStr = date.toISOString().split("T")[0]
+                const dateStr = toLocalDateString(date)
                 const events = getEventsForDate(date)
+                const pinned = getPinnedForDate(date)
                 const isToday = dateStr === today
 
                 return (
@@ -428,6 +511,19 @@ export function CalendarPage() {
                           </p>
                         </div>
                         <div className="space-y-1">
+                          {pinned.map((item) => (
+                            <button
+                              key={item.key}
+                              type="button"
+                              className="block w-full text-left"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openPinned(item)
+                              }}
+                            >
+                              <PinnedChip item={item} className="p-2" />
+                            </button>
+                          ))}
                           {events.map((event) => (
                             <div
                               key={event.id}
@@ -453,11 +549,13 @@ export function CalendarPage() {
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
-                        <DialogTitle>{formatDateFr(dateStr, "full")}</DialogTitle>
+                        <DialogTitle>{formatDateFr(`${dateStr}T00:00`, "full")}</DialogTitle>
                         <DialogDescription>
                           Gérez les événements de cette journée
                         </DialogDescription>
                       </DialogHeader>
+
+                      <PinnedList items={pinned} onOpen={() => setIsDialogOpen(false)} />
 
                       {/* Existing events */}
                       {events.length > 0 && (
@@ -559,14 +657,14 @@ export function CalendarPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>{formatDateFr(currentDate, "full")}</CardTitle>
-            <Dialog open={isDialogOpen && selectedDate === currentDate.toISOString().split("T")[0]} onOpenChange={(open) => {
+            <Dialog open={isDialogOpen && selectedDate === toLocalDateString(currentDate)} onOpenChange={(open) => {
               if (open) {
-                setSelectedDate(currentDate.toISOString().split("T")[0])
+                setSelectedDate(toLocalDateString(currentDate))
               }
               setIsDialogOpen(open)
             }}>
               <DialogTrigger asChild>
-                <Button size="sm" onClick={() => setSelectedDate(currentDate.toISOString().split("T")[0])}>
+                <Button size="sm" onClick={() => setSelectedDate(toLocalDateString(currentDate))}>
                   <Plus className="size-4 mr-2" />
                   Ajouter un événement
                 </Button>
@@ -633,10 +731,11 @@ export function CalendarPage() {
             </Dialog>
           </CardHeader>
           <CardContent className="space-y-4">
+            <PinnedList items={getPinnedForDate(currentDate)} />
             {(() => {
               const events = getEventsForDate(currentDate)
               if (events.length === 0) {
-                return (
+                return getPinnedForDate(currentDate).length > 0 ? null : (
                   <p className="text-center text-muted-foreground py-8">
                     Aucun événement pour cette journée
                   </p>

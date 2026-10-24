@@ -1,11 +1,13 @@
 "use client"
 
-import { useState, useMemo, useEffect, useRef } from "react"
+import { useState, useMemo, useRef, useCallback } from "react"
+import { createPortal } from "react-dom"
+import type { Editor } from "@tiptap/react"
+import { sanitizeNoteHtml } from "@/lib/sanitize-html"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -23,27 +25,24 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
   Plus,
-  MoreHorizontal,
   Trash2,
   Edit,
   Pin,
   PinOff,
-  StickyNote,
   Search,
   ArrowLeft,
-  Bold,
-  Italic,
-  Underline,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
+  Check,
   Download,
-  Type,
+  FileDown,
+  Loader2,
+  Printer,
 } from "lucide-react"
 import { useApp } from "@/lib/store-api"
-import { generateId, formatDateFr } from "@/lib/helpers"
+import { formatDateFr } from "@/lib/helpers"
 import type { Note } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { NoteEditor } from "@/components/notes/note-editor"
+import { Lottie, MoreDots } from "@/components/lottie"
 
 const NOTE_COLORS = [
   { value: "#fef3c7", label: "Jaune" },
@@ -56,21 +55,82 @@ const NOTE_COLORS = [
   { value: "#ffffff", label: "Blanc" },
 ]
 
+const AUTOSAVE_MS = 1500
+
+const safeFileName = (title: string) => title.replace(/[^a-z0-9àâäéèêëîïôöùûüç _-]/gi, "_").trim() || "note"
+
+// Impression (et "Enregistrer en PDF" du navigateur) : la note seule, avec toute sa mise en forme et ses images
+function printNote(title: string, html: string) {
+  const root = document.createElement("div")
+  root.id = "note-print-root"
+  const heading = document.createElement("h1")
+  heading.textContent = title
+  heading.style.cssText = "font-size: 24px; font-weight: 700; margin-bottom: 16px"
+  const content = document.createElement("div")
+  content.className = "note-content"
+  content.innerHTML = sanitizeNoteHtml(html)
+  root.append(heading, content)
+  document.body.appendChild(root)
+  document.documentElement.classList.add("printing-note")
+  const cleanup = () => {
+    document.documentElement.classList.remove("printing-note")
+    root.remove()
+    window.removeEventListener("afterprint", cleanup)
+  }
+  window.addEventListener("afterprint", cleanup)
+  window.print()
+}
+
+// Les images de la note n'existent que sur le serveur : elles sont intégrées au fichier Word
+async function inlineImages(html: string): Promise<string> {
+  const container = document.createElement("div")
+  container.innerHTML = html
+  await Promise.all(
+    Array.from(container.querySelectorAll("img")).map(async (img) => {
+      try {
+        const blob = await fetch(img.src).then((r) => r.blob())
+        img.src = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(String(reader.result))
+          reader.onerror = reject
+          reader.readAsDataURL(blob)
+        })
+      } catch {
+        /* image indisponible : on garde le lien */
+      }
+    })
+  )
+  return container.innerHTML
+}
+
+// Fichier .doc (HTML que Word, LibreOffice et Google Docs ouvrent avec la mise en forme)
+async function exportToWord(title: string, html: string) {
+  const body = await inlineImages(sanitizeNoteHtml(html))
+  const doc = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>${title.replace(/</g, "&lt;")}</title><style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt}table{border-collapse:collapse}td,th{border:1px solid #999;padding:4px 6px}blockquote{border-left:3px solid #ccc;padding-left:12px;color:#555}</style></head><body><h1>${title.replace(/</g, "&lt;")}</h1>${body}</body></html>`
+  const url = URL.createObjectURL(new Blob(["﻿", doc], { type: "application/msword" }))
+  const a = document.createElement("a")
+  a.href = url
+  a.download = `${safeFileName(title)}.doc`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export function NotesPage() {
   const { state, addNote, updateNote, deleteNote } = useApp()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingNote, setEditingNote] = useState<Note | null>(null)
-  const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [currentNote, setCurrentNote] = useState<Note | null>(null)
-  const [noteContent, setNoteContent] = useState("")
+  const [saveState, setSaveState] = useState<"saved" | "pending" | "saving">("saved")
   const [searchQuery, setSearchQuery] = useState("")
   const [newNote, setNewNote] = useState<Partial<Note>>({
     title: "",
     color: "#fef3c7",
     pinned: false,
   })
-  const editorRef = useRef<HTMLDivElement>(null)
+  // Dernier contenu de l'éditeur et sauvegarde automatique en attente
+  const latestHtml = useRef("")
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const editorRef = useRef<Editor | null>(null)
 
   const filteredNotes = useMemo(() => {
     if (!searchQuery) return state.notes || []
@@ -82,19 +142,14 @@ export function NotesPage() {
     )
   }, [state.notes, searchQuery])
 
-  const pinnedNotes = useMemo(() => {
-    return filteredNotes.filter((n) => n.pinned)
-  }, [filteredNotes])
-
-  const unpinnedNotes = useMemo(() => {
-    return filteredNotes.filter((n) => !n.pinned)
-  }, [filteredNotes])
+  const pinnedNotes = useMemo(() => filteredNotes.filter((n) => n.pinned), [filteredNotes])
+  const unpinnedNotes = useMemo(() => filteredNotes.filter((n) => !n.pinned), [filteredNotes])
 
   const handleSaveNote = async () => {
     if (!newNote.title) return
 
     if (editingNote) {
-      const updated = await updateNote({
+      await updateNote({
         ...editingNote,
         title: newNote.title || "Sans titre",
         color: newNote.color,
@@ -119,298 +174,49 @@ export function NotesPage() {
   }
 
   const openNoteEditor = (note: Note) => {
+    latestHtml.current = note.content
+    setSaveState("saved")
     setCurrentNote(note)
-    setNoteContent(note.content)
-    setIsEditorOpen(true)
-    // Initialiser le contenu une seule fois à l'ouverture
-    setTimeout(() => {
-      if (editorRef.current) {
-        editorRef.current.innerHTML = note.content || ""
-        editorRef.current.focus()
-      }
-    }, 0)
   }
 
-  const handleEditorInput = () => {
-    if (editorRef.current && currentNote) {
-      const newContent = editorRef.current.innerHTML
-      setNoteContent(newContent)
-
-      // Auto-save après 2 secondes d'inactivité
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current)
+  const save = useCallback(
+    async (note: Note, content: string) => {
+      setSaveState("saving")
+      try {
+        await updateNote({ ...note, content })
+        // Le contenu a pu changer pendant l'envoi : une autre sauvegarde suivra
+        setSaveState((s) => (s === "saving" && latestHtml.current === content ? "saved" : s))
+      } catch {
+        setSaveState("pending")
       }
-      autoSaveTimeoutRef.current = setTimeout(async () => {
-        await updateNote({
-          ...currentNote,
-          content: newContent,
-        })
-      }, 2000)
-    }
-  }
+    },
+    [updateNote]
+  )
+
+  const handleEditorChange = useCallback(
+    (html: string) => {
+      if (!currentNote) return
+      latestHtml.current = html
+      setSaveState("pending")
+      if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current)
+      autoSaveTimeoutRef.current = setTimeout(() => save(currentNote, html), AUTOSAVE_MS)
+    },
+    [currentNote, save]
+  )
 
   const closeNoteEditor = async () => {
-    // Annuler le timeout en cours
-    if (autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current)
+    if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current)
+    // Dernière sauvegarde si quelque chose a changé
+    if (currentNote && latestHtml.current !== currentNote.content) {
+      await updateNote({ ...currentNote, content: latestHtml.current })
     }
-    
-    // Sauvegarder une dernière fois si nécessaire
-    if (currentNote && editorRef.current) {
-      const finalContent = editorRef.current.innerHTML
-      if (finalContent !== currentNote.content) {
-        await updateNote({
-          ...currentNote,
-          content: finalContent,
-        })
-      }
-    }
-    
-    setIsEditorOpen(false)
+    editorRef.current = null
     setCurrentNote(null)
-    setNoteContent("")
   }
 
-  const execCommand = (command: string, value?: string) => {
-    document.execCommand(command, false, value)
-    editorRef.current?.focus()
-  }
-
-  const exportToPDF = async () => {
-    if (!currentNote || !editorRef.current) return
-
-    try {
-      // Dynamically import jsPDF
-      const { jsPDF } = await import('jspdf')
-      
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      })
-
-      // Configuration
-      const pageWidth = doc.internal.pageSize.getWidth()
-      const pageHeight = doc.internal.pageSize.getHeight()
-      const margin = 20
-      const maxWidth = pageWidth - 2 * margin
-      let yPosition = margin
-      const lineHeight = 7
-      const fontSize = 12
-
-      // Fonction pour vérifier si nouvelle page nécessaire
-      const checkNewPage = (extraSpace = 0) => {
-        if (yPosition + lineHeight + extraSpace > pageHeight - margin) {
-          doc.addPage()
-          yPosition = margin
-        }
-      }
-
-      // Fonction pour parser et rendre le HTML avec formatage
-      const renderFormattedContent = (element: Element | ChildNode) => {
-        const children = element.childNodes
-
-        children.forEach((node) => {
-          if (node.nodeType === Node.TEXT_NODE) {
-            // Noeud texte simple
-            const text = node.textContent || ''
-            if (text.trim()) {
-              doc.setFontSize(fontSize)
-              const lines = doc.splitTextToSize(text, maxWidth)
-              lines.forEach((line: string) => {
-                checkNewPage()
-                doc.text(line, margin, yPosition)
-                yPosition += lineHeight
-              })
-            }
-          } else if (node.nodeType === Node.ELEMENT_NODE) {
-            const el = node as HTMLElement
-            const tagName = el.tagName.toLowerCase()
-
-            // Gestion des retours à la ligne
-            if (tagName === 'br') {
-              yPosition += lineHeight * 0.5
-              return
-            }
-
-            // Gestion des paragraphes et divs
-            if (tagName === 'p' || tagName === 'div') {
-              // Ajouter un espace avant le paragraphe
-              if (yPosition > margin + 20) {
-                yPosition += lineHeight * 0.3
-              }
-              
-              // Détecter l'alignement
-              const style = el.getAttribute('style') || ''
-              let align: 'left' | 'center' | 'right' = 'left'
-              if (style.includes('text-align: center') || style.includes('text-align:center')) {
-                align = 'center'
-              } else if (style.includes('text-align: right') || style.includes('text-align:right')) {
-                align = 'right'
-              }
-              
-              // Traiter le contenu du paragraphe avec formatage inline
-              renderInlineContent(el, align)
-              
-              // Espace après le paragraphe
-              yPosition += lineHeight * 0.3
-              return
-            }
-
-            // Récursion pour autres éléments
-            renderFormattedContent(node)
-          }
-        })
-      }
-
-      // Fonction pour gérer le contenu inline (bold, italic, underline, alignment)
-      const renderInlineContent = (element: HTMLElement, textAlign: 'left' | 'center' | 'right' = 'left') => {
-        let currentX = margin
-        const lineContent: Array<{text: string, bold: boolean, italic: boolean, underline: boolean}> = []
-        
-        // Collecter tout le contenu avec ses styles
-        const collectContent = (el: Element | ChildNode, styles: {bold: boolean, italic: boolean, underline: boolean}) => {
-          el.childNodes.forEach((node) => {
-            if (node.nodeType === Node.TEXT_NODE) {
-              const text = node.textContent || ''
-              if (text) {
-                lineContent.push({
-                  text,
-                  bold: styles.bold,
-                  italic: styles.italic,
-                  underline: styles.underline
-                })
-              }
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-              const childEl = node as HTMLElement
-              const tag = childEl.tagName.toLowerCase()
-              const newStyles = {
-                bold: styles.bold || tag === 'b' || tag === 'strong',
-                italic: styles.italic || tag === 'i' || tag === 'em',
-                underline: styles.underline || tag === 'u'
-              }
-              
-              if (tag === 'br') {
-                lineContent.push({text: '\n', bold: false, italic: false, underline: false})
-              } else {
-                collectContent(childEl, newStyles)
-              }
-            }
-          })
-        }
-
-        collectContent(element, {bold: false, italic: false, underline: false})
-
-        // Rendre le contenu collecté
-        let currentLine = ''
-        let currentStyles: Array<{text: string, bold: boolean, italic: boolean, underline: boolean}> = []
-
-        const flushLine = () => {
-          if (currentStyles.length === 0) return
-          
-          checkNewPage()
-          
-          // Calculer la largeur totale de la ligne
-          let totalLineWidth = 0
-          currentStyles.forEach((segment) => {
-            let fontStyle = 'normal'
-            if (segment.bold && segment.italic) fontStyle = 'bolditalic'
-            else if (segment.bold) fontStyle = 'bold'
-            else if (segment.italic) fontStyle = 'italic'
-            doc.setFont('helvetica', fontStyle)
-            doc.setFontSize(fontSize)
-            totalLineWidth += doc.getTextWidth(segment.text)
-          })
-          
-          // Calculer la position X en fonction de l'alignement
-          if (textAlign === 'center') {
-            currentX = margin + (maxWidth - totalLineWidth) / 2
-          } else if (textAlign === 'right') {
-            currentX = margin + maxWidth - totalLineWidth
-          } else {
-            currentX = margin
-          }
-          
-          currentStyles.forEach((segment) => {
-            // Définir le style de police
-            let fontStyle = 'normal'
-            if (segment.bold && segment.italic) {
-              fontStyle = 'bolditalic'
-            } else if (segment.bold) {
-              fontStyle = 'bold'
-            } else if (segment.italic) {
-              fontStyle = 'italic'
-            }
-            
-            doc.setFontSize(fontSize)
-            doc.setFont('helvetica', fontStyle)
-            
-            const textWidth = doc.getTextWidth(segment.text)
-            doc.text(segment.text, currentX, yPosition)
-            
-            // Dessiner le soulignement
-            if (segment.underline) {
-              doc.setLineWidth(0.3)
-              doc.line(currentX, yPosition + 1, currentX + textWidth, yPosition + 1)
-            }
-            
-            currentX += textWidth
-          })
-          
-          yPosition += lineHeight
-          currentStyles = []
-        }
-
-        // Traiter chaque segment
-        lineContent.forEach((segment) => {
-          if (segment.text === '\n') {
-            flushLine()
-            return
-          }
-
-          // Calculer si le texte rentre sur la ligne actuelle
-          doc.setFontSize(fontSize)
-          const words = segment.text.split(' ')
-          
-          words.forEach((word, idx) => {
-            const wordWithSpace = idx < words.length - 1 ? word + ' ' : word
-            const wordWidth = doc.getTextWidth(wordWithSpace)
-            const currentLineWidth = currentStyles.reduce((acc, s) => acc + doc.getTextWidth(s.text), 0)
-            
-            if (currentLineWidth + wordWidth > maxWidth && currentStyles.length > 0) {
-              flushLine()
-            }
-            
-            currentStyles.push({
-              text: wordWithSpace,
-              bold: segment.bold,
-              italic: segment.italic,
-              underline: segment.underline
-            })
-          })
-        })
-
-        // Flush le reste
-        flushLine()
-      }
-
-      // Créer un élément temporaire pour parser le HTML
-      const tempDiv = document.createElement('div')
-      tempDiv.innerHTML = editorRef.current.innerHTML
-
-      // Rendre le contenu formaté
-      doc.setFontSize(fontSize)
-      doc.setFont('helvetica', 'normal')
-      renderFormattedContent(tempDiv)
-
-      // Télécharger le PDF
-      const fileName = `${currentNote.title.replace(/[^a-z0-9]/gi, '_')}.pdf`
-      doc.save(fileName)
-    } catch (error) {
-      console.error('Erreur lors de l\'export PDF:', error)
-      alert('Erreur lors de la création du PDF')
-    }
-  }
+  const onEditorReady = useCallback((editor: Editor) => {
+    editorRef.current = editor
+  }, [])
 
   const openEditDialog = (note: Note) => {
     setEditingNote(note)
@@ -436,7 +242,8 @@ export function NotesPage() {
   const renderNoteCard = (note: Note) => (
     <Card
       key={note.id}
-      className="group relative overflow-hidden transition-all hover:shadow-lg cursor-pointer"
+      // Fond pastel même en mode sombre : texte toujours foncé pour rester lisible
+      className="group relative overflow-hidden text-neutral-900 transition-all hover:shadow-lg cursor-pointer"
       style={{ backgroundColor: note.color }}
       onClick={() => openNoteEditor(note)}
     >
@@ -459,8 +266,8 @@ export function NotesPage() {
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Button variant="ghost" size="icon" className="size-8 bg-background/80">
-                <MoreHorizontal className="size-4" />
+              <Button variant="ghost" size="icon" className="size-8 bg-background/80 hover:bg-background/80 hover:text-foreground dark:hover:bg-background/80">
+                <MoreDots />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -487,22 +294,23 @@ export function NotesPage() {
         </div>
 
         {note.pinned && (
-          <Pin className="absolute top-2 left-2 size-4 text-muted-foreground" />
+          <Pin className="absolute top-2 left-2 size-4 text-neutral-600" />
         )}
 
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-lg mb-2 pr-16">
             {note.title}
           </h3>
-          <div 
-            className="text-sm text-muted-foreground line-clamp-6"
-            dangerouslySetInnerHTML={{ 
-              __html: note.content || "<em>Aucun contenu</em>" 
+          <div
+            className="note-content max-h-40 overflow-hidden text-sm text-neutral-700 [&_img]:max-h-24 [&_img]:w-auto"
+            // Contenu nettoyé : une note ne doit jamais pouvoir exécuter de script (XSS)
+            dangerouslySetInnerHTML={{
+              __html: sanitizeNoteHtml(note.content) || "<em>Aucun contenu</em>"
             }}
           />
         </div>
 
-        <div className="text-xs text-muted-foreground mt-4">
+        <div className="text-xs text-neutral-600 mt-4">
           {formatDateFr(note.updatedAt, "short")}
         </div>
       </CardContent>
@@ -520,7 +328,7 @@ export function NotesPage() {
           </p>
         </div>
 
-        <Button onClick={() => setIsDialogOpen(true)} size="sm" className="sm:size-default w-full sm:w-auto">
+        <Button data-tour="notes-add" onClick={() => setIsDialogOpen(true)} size="sm" className="sm:size-default w-full sm:w-auto">
           <Plus className="size-4 mr-2" />
           Nouvelle note
         </Button>
@@ -544,7 +352,7 @@ export function NotesPage() {
             <Pin className="size-5" />
             Épinglées
           </h2>
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 @4xl/main:grid-cols-3 @6xl/main:grid-cols-4">
             {pinnedNotes.map(renderNoteCard)}
           </div>
         </div>
@@ -556,28 +364,27 @@ export function NotesPage() {
           {pinnedNotes.length > 0 && (
             <h2 className="text-lg font-semibold mb-4">Autres notes</h2>
           )}
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 @4xl/main:grid-cols-3 @6xl/main:grid-cols-4">
             {unpinnedNotes.map(renderNoteCard)}
           </div>
         </div>
       )}
 
-      {/* Empty State */}
+      {/* Aucune note : animation au centre de la page ; recherche sans résultat : simple message */}
       {filteredNotes.length === 0 && (
-        <div className="grid gap-4 grid-cols-1">
-          <Card className="border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer"
-                onClick={() => setIsDialogOpen(true)}>
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <StickyNote className="size-8 text-muted-foreground mb-2" />
-              <p className="text-sm font-medium text-muted-foreground">Note rapide</p>
-              <p className="text-xs text-muted-foreground mt-1">Capturez vos idées</p>
-              <Button className="mt-4" size="sm">
-                <Plus className="size-4 mr-2" />
-                Créer
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+        (state.notes || []).length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <Lottie src="/animations/utilisees/Pensil Drawing.json" adaptive="ink" className="size-56 text-foreground sm:size-72" />
+            <p className="font-medium">Aucune note pour l'instant</p>
+            <p className="mt-1 text-sm text-muted-foreground">Capture tes idées, listes et brouillons</p>
+            <Button className="mt-4" size="sm" onClick={() => setIsDialogOpen(true)}>
+              <Plus className="size-4 mr-2" />
+              Créer une note
+            </Button>
+          </div>
+        ) : (
+          <p className="py-12 text-center text-sm text-muted-foreground">Aucune note ne correspond à « {searchQuery} »</p>
+        )
       )}
 
       {/* Note Dialog */}
@@ -652,11 +459,11 @@ export function NotesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Note Editor Full Screen */}
-      {isEditorOpen && currentNote && (
+      {/* Éditeur plein écran, rendu dans <body> : la zone de contenu de l'app (conteneur CSS) le limiterait sinon à sa taille */}
+      {currentNote && createPortal(
         <div className="fixed inset-0 z-50 bg-background flex flex-col">
           {/* Header */}
-          <div className="border-b px-4 py-3 flex items-center justify-between gap-4 bg-background">
+          <div className="border-b px-2 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2 sm:gap-4 bg-background">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <Button
                 variant="ghost"
@@ -668,106 +475,50 @@ export function NotesPage() {
               </Button>
               <div className="min-w-0 flex-1">
                 <h2 className="font-semibold truncate">{currentNote.title}</h2>
-                <p className="text-xs text-muted-foreground">
-                  Dernière modification : {formatDateFr(currentNote.updatedAt, "short")}
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  {saveState === "saved" ? (
+                    <>
+                      <Check className="size-3" /> Enregistré
+                    </>
+                  ) : saveState === "saving" ? (
+                    <>
+                      <Loader2 className="size-3 animate-spin" /> Enregistrement…
+                    </>
+                  ) : (
+                    "Modifications non enregistrées"
+                  )}
                 </p>
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportToPDF}
-            >
-              <Download className="size-4 mr-2" />
-              Export PDF
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Download className="size-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Exporter</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => printNote(currentNote.title, editorRef.current?.getHTML() ?? latestHtml.current)}>
+                  <Printer className="size-4" />
+                  Imprimer / PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportToWord(currentNote.title, editorRef.current?.getHTML() ?? latestHtml.current)}>
+                  <FileDown className="size-4" />
+                  Document Word (.doc)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
-          {/* Toolbar */}
-          <div className="border-b px-4 py-2 flex items-center gap-1 bg-background flex-wrap">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => execCommand('bold')}
-              title="Gras (Ctrl+B)"
-            >
-              <Bold className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => execCommand('italic')}
-              title="Italique (Ctrl+I)"
-            >
-              <Italic className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => execCommand('underline')}
-              title="Souligné (Ctrl+U)"
-            >
-              <Underline className="size-4" />
-            </Button>
-            
-            <div className="w-px h-6 bg-border mx-1" />
-            
-            <select
-              className="text-sm border rounded px-2 py-1"
-              onChange={(e) => execCommand('fontSize', e.target.value)}
-              defaultValue="3"
-            >
-              <option value="1">Petit</option>
-              <option value="3">Normal</option>
-              <option value="5">Grand</option>
-              <option value="7">Très grand</option>
-            </select>
-
-            <div className="w-px h-6 bg-border mx-1" />
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => execCommand('justifyLeft')}
-              title="Aligner à gauche"
-            >
-              <AlignLeft className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => execCommand('justifyCenter')}
-              title="Centrer"
-            >
-              <AlignCenter className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => execCommand('justifyRight')}
-              title="Aligner à droite"
-            >
-              <AlignRight className="size-4" />
-            </Button>
-          </div>
-
-          {/* Editor */}
-          <div className="flex-1 overflow-auto bg-[#f8f1e3] dark:bg-[#1a1a1a]">
-            <div className="max-w-4xl mx-auto p-6 sm:p-8">
-              <div
-                ref={editorRef}
-                contentEditable
-                onInput={handleEditorInput}
-                className="min-h-[calc(100vh-240px)] shadow-lg rounded p-8 focus:outline-none text-base leading-relaxed bg-[#fffef5] dark:bg-[#242424] dark:text-gray-100"
-                style={{
-                  fontSize: '16px',
-                  lineHeight: '1.75',
-                }}
-                suppressContentEditableWarning
-              />
-            </div>
-          </div>
-        </div>
+          <NoteEditor
+            key={currentNote.id}
+            noteId={currentNote.id}
+            initialHtml={sanitizeNoteHtml(currentNote.content)}
+            onChange={handleEditorChange}
+            onReady={onEditorReady}
+          />
+        </div>,
+        document.body
       )}
     </div>
   )

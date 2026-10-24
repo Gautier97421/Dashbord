@@ -55,6 +55,9 @@ import { getToday, formatDateFr, calculateStreak, generateId } from "@/lib/helpe
 import type { NavPage } from "@/components/app-sidebar"
 import type { WidgetType, DashboardWidget } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { getProjectStatus } from "@/lib/project-status"
+import { Lottie, withoutDashboardBackground } from "@/components/lottie"
+import { StreakFlame } from "@/components/lottie"
 
 interface DashboardPageProps {
   onNavigate: (page: NavPage) => void
@@ -68,10 +71,10 @@ const WIDGET_LABELS: Record<WidgetType, { label: string; description: string; ic
   "night-routine-progress": { label: "Routine du soir", description: "Progression routine du soir", icon: Moon, category: "Routine" },
   "night-routine-list": { label: "Liste routine soir", description: "Actions de la routine du soir", icon: Moon, category: "Routine" },
   
-  "missions-stats": { label: "Missions", description: "Statistiques des missions", icon: Target, category: "Missions" },
-  "today-missions": { label: "Missions du jour", description: "Missions à faire aujourd'hui", icon: Target, category: "Missions" },
-  "week-missions": { label: "Missions semaine", description: "Missions de la semaine", icon: Target, category: "Missions" },
-  "mission-priority-high": { label: "Missions urgentes", description: "Missions haute priorité", icon: Target, category: "Missions" },
+  "missions-stats": { label: "Objectifs", description: "Statistiques des objectifs", icon: Target, category: "Objectifs" },
+  "today-missions": { label: "Objectifs du jour", description: "Objectifs à faire aujourd'hui", icon: Target, category: "Objectifs" },
+  "week-missions": { label: "Objectifs semaine", description: "Objectifs de la semaine", icon: Target, category: "Objectifs" },
+  "mission-priority-high": { label: "Objectifs urgents", description: "Objectifs haute priorité", icon: Target, category: "Objectifs" },
   
   "tasks-stats": { label: "Tâches", description: "Statistiques des tâches", icon: CheckCircle2, category: "Tâches" },
   "tasks-today": { label: "Tâches du jour", description: "Tâches à faire aujourd'hui", icon: CheckCircle2, category: "Tâches" },
@@ -106,6 +109,58 @@ const DEFAULT_DASHBOARD_WIDGETS: DashboardWidget[] = [
   { id: "7", type: "week-missions", enabled: true, order: 6, width: 2, height: 1, row: 2, col: 0 },
   { id: "8", type: "active-projects", enabled: true, order: 7, width: 2, height: 1, row: 2, col: 2 },
 ]
+
+// Calcule row/col pour les widgets qui n'en ont pas (ex: sauvegardés avant l'ajout de ces colonnes en base),
+// afin que l'éditeur de grille affiche toujours une disposition valide au lieu d'une grille vide.
+function withGridPositions(widgetsToPlace: DashboardWidget[], cols: number): DashboardWidget[] {
+  const sorted = [...widgetsToPlace].sort((a, b) => a.order - b.order)
+  const occupied: boolean[][] = []
+
+  const ensureRow = (r: number) => {
+    while (occupied.length <= r) occupied.push(Array(cols).fill(false))
+  }
+
+  const canPlace = (row: number, col: number, width: number, height: number) => {
+    if (col + width > cols) return false
+    ensureRow(row + height - 1)
+    for (let r = row; r < row + height; r++) {
+      for (let c = col; c < col + width; c++) {
+        if (occupied[r][c]) return false
+      }
+    }
+    return true
+  }
+
+  const place = (row: number, col: number, width: number, height: number) => {
+    ensureRow(row + height - 1)
+    for (let r = row; r < row + height; r++) {
+      for (let c = col; c < col + width; c++) {
+        occupied[r][c] = true
+      }
+    }
+  }
+
+  // Réserver l'espace déjà occupé par les widgets qui ont une position valide
+  sorted.forEach((w) => {
+    if (w.row != null && w.col != null) place(w.row, w.col, w.width, w.height)
+  })
+
+  return sorted.map((w) => {
+    if (w.row != null && w.col != null) return w
+
+    let row = 0
+    while (row < 200) {
+      for (let col = 0; col <= cols - w.width; col++) {
+        if (canPlace(row, col, w.width, w.height)) {
+          place(row, col, w.width, w.height)
+          return { ...w, row, col }
+        }
+      }
+      row++
+    }
+    return { ...w, row: 0, col: 0 }
+  })
+}
 
 export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const { state, dispatch, isLoading, updateDashboardWidgets, updateMission, logRoutine } = useApp()
@@ -235,7 +290,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
       const weekAgo = new Date()
       weekAgo.setDate(weekAgo.getDate() - 7)
       const workoutDate = new Date(w.date)
-      const today = new Date().toISOString().split("T")[0]
       return workoutDate >= weekAgo && w.date <= today && w.completed
     }).length
 
@@ -306,8 +360,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
 
   // Fonctions pour l'éditeur de grille avancé
   const openGridEditor = () => {
-    setEditorWidgets([...widgets])
-    setEditorMobileWidgets([...widgets]) // Clone pour mobile
+    setEditorWidgets(withGridPositions(widgets, 4))
+    setEditorMobileWidgets(withGridPositions(widgets, 2)) // Clone pour mobile
     setSeparateMobileLayout(false)
     setEditingMobileLayout(false)
     setGridEditorOpen(true)
@@ -650,7 +704,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             <CardContent className="p-4 flex-1 flex flex-col justify-center">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Missions</p>
+                  <p className="text-sm text-muted-foreground">Objectifs</p>
                   <p className="text-2xl font-bold">
                     {stats.missionsCompleted}/{stats.missionsTotal}
                   </p>
@@ -793,7 +847,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                     </div>
                     {streak.current > 0 && (
                       <div className="flex items-center gap-1 text-orange-500">
-                        <Flame className="size-4" />
+                        <StreakFlame className="size-5" />
                         <span className="text-xs font-medium">{streak.current}j</span>
                       </div>
                     )}
@@ -809,8 +863,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           <Card className="h-full w-full flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div>
-                <CardTitle className="text-lg">Missions du jour</CardTitle>
-                <CardDescription>{todayMissions.length} missions en attente</CardDescription>
+                <CardTitle className="text-lg">Objectifs du jour</CardTitle>
+                <CardDescription>{todayMissions.length} objectifs en attente</CardDescription>
               </div>
               <Button variant="ghost" size="sm" onClick={() => onNavigate("missions")}>
                 Voir tout
@@ -820,7 +874,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             <CardContent className="space-y-2 flex-1 overflow-auto">
               {todayMissions.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">
-                  Aucune mission pour aujourd&apos;hui
+                  Aucun objectif pour aujourd&apos;hui
                 </p>
               ) : (
                 todayMissions.map((mission) => (
@@ -835,7 +889,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                       >
                         {mission.status === "done" ? (
                           <CheckCircle2 className="size-5 text-success" />
-                        ) : mission.status === "in-progress" ? (
+                        ) : mission.status === "in_progress" ? (
                           <Clock className="size-5 text-primary" />
                         ) : (
                           <Circle className="size-5 text-muted-foreground hover:text-primary" />
@@ -871,8 +925,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           <Card className="h-full w-full flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div>
-                <CardTitle className="text-lg">Missions de la semaine</CardTitle>
-                <CardDescription>{weekMissions.length} missions cette semaine</CardDescription>
+                <CardTitle className="text-lg">Objectifs de la semaine</CardTitle>
+                <CardDescription>{weekMissions.length} objectifs cette semaine</CardDescription>
               </div>
               <Button variant="ghost" size="sm" onClick={() => onNavigate("missions")}>
                 Voir tout
@@ -882,7 +936,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             <CardContent className="space-y-2 flex-1 overflow-auto">
               {weekMissions.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">
-                  Aucune mission pour cette semaine
+                  Aucun objectif pour cette semaine
                 </p>
               ) : (
                 weekMissions.map((mission) => (
@@ -893,7 +947,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                     <div className="flex items-center gap-3">
                       {mission.status === "done" ? (
                         <CheckCircle2 className="size-5 text-success" />
-                      ) : mission.status === "in-progress" ? (
+                      ) : mission.status === "in_progress" ? (
                         <Clock className="size-5 text-primary" />
                       ) : (
                         <Circle className="size-5 text-muted-foreground" />
@@ -929,13 +983,19 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               ) : (
                 activeProjects.map((project) => {
                   const progress = getProjectProgress(project.id)
+                  const hasTasks = state.tasks.some((t) => t.projectId === project.id)
+                  const status = getProjectStatus(project.status)
                   return (
                     <div key={project.id} className="space-y-2 rounded-lg border p-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium">{project.title}</p>
-                        <span className="text-xs text-muted-foreground">{progress}%</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium truncate">{project.title}</p>
+                        {hasTasks ? (
+                          <span className="text-xs text-muted-foreground">{progress}%</span>
+                        ) : status && (
+                          <span className={cn("text-xs shrink-0", status.className)}>{status.label}</span>
+                        )}
                       </div>
-                      <Progress value={progress} className="h-1.5" />
+                      {hasTasks && <Progress value={progress} className="h-1.5" />}
                       {project.deadline && (
                         <p className="text-xs text-muted-foreground">
                           Échéance : {formatDateFr(project.deadline, "short")}
@@ -1048,8 +1108,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                   <p className="text-2xl font-bold">{longestStreak}</p>
                   <p className="text-xs text-muted-foreground">Jours consécutifs</p>
                 </div>
-                <div className="rounded-full bg-orange-500/10 p-2">
-                  <Flame className="size-5 text-orange-600" />
+                <div>
+                  <StreakFlame className="size-8" />
                 </div>
               </div>
             </CardContent>
@@ -1110,7 +1170,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           <Card className="h-full w-full flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div>
-                <CardTitle className="text-lg">Missions urgentes</CardTitle>
+                <CardTitle className="text-lg">Objectifs urgents</CardTitle>
                 <CardDescription>{highPriorityMissions.length} en haute priorité</CardDescription>
               </div>
               <Button variant="ghost" size="sm" onClick={() => onNavigate("missions")}>
@@ -1121,7 +1181,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             <CardContent className="space-y-2 flex-1 overflow-auto">
               {highPriorityMissions.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">
-                  Aucune mission urgente
+                  Aucun objectif urgent
                 </p>
               ) : (
                 highPriorityMissions.map((mission) => (
@@ -1250,13 +1310,19 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               ) : (
                 activeProjects.slice(0, 4).map((project) => {
                   const progress = getProjectProgress(project.id)
+                  const hasTasks = state.tasks.some((t) => t.projectId === project.id)
+                  const status = getProjectStatus(project.status)
                   return (
                     <div key={project.id} className="space-y-1.5">
-                      <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center justify-between gap-2 text-sm">
                         <span className="font-medium truncate">{project.title}</span>
-                        <span className="text-muted-foreground">{progress}%</span>
+                        {hasTasks ? (
+                          <span className="text-muted-foreground">{progress}%</span>
+                        ) : status && (
+                          <span className={cn("text-xs shrink-0", status.className)}>{status.label}</span>
+                        )}
                       </div>
-                      <Progress value={progress} className="h-2" />
+                      {hasTasks && <Progress value={progress} className="h-2" />}
                     </div>
                   )
                 })
@@ -1469,11 +1535,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={() => setShowResetConfirm(true)} className="flex-1 sm:flex-none">
+          <Button data-tour="dashboard-reset" variant="outline" size="sm" onClick={() => setShowResetConfirm(true)} className="flex-1 sm:flex-none">
             <RotateCcw className="mr-1 sm:mr-2 size-3 sm:size-4" />
             <span className="text-xs sm:text-sm">Par défaut</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={openGridEditor} className="flex-1 sm:flex-none">
+          <Button data-tour="dashboard-customize" variant="outline" size="sm" onClick={openGridEditor} className="flex-1 sm:flex-none">
             <Settings className="mr-1 sm:mr-2 size-3 sm:size-4" />
             <span className="text-xs sm:text-sm">Personnaliser</span>
           </Button>
@@ -1525,92 +1591,17 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
 
       {/* Widgets Grid */}
       {enabledWidgets.length === 0 ? (
-        <div className="grid gap-2 sm:gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 auto-rows-[120px] sm:auto-rows-[150px]">
-          {/* Aperçu des widgets par défaut en pointillés */}
-          <Card 
-            className="py-0 col-span-2 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-            onClick={openGridEditor}
-          >
-            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
-              <CheckCircle2 className="size-6 text-muted-foreground mb-1" />
-              <p className="text-xs font-medium text-muted-foreground">Routine</p>
-            </CardContent>
-          </Card>
-          
-          <Card 
-            className="py-0 col-span-2 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-            onClick={openGridEditor}
-          >
-            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
-              <Target className="size-6 text-muted-foreground mb-1" />
-              <p className="text-xs font-medium text-muted-foreground">Missions</p>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="py-0 col-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-            onClick={openGridEditor}
-          >
-            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
-              <Clock className="size-6 text-muted-foreground mb-1" />
-              <p className="text-xs font-medium text-muted-foreground">Tâches</p>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="py-0 col-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-            onClick={openGridEditor}
-          >
-            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
-              <FolderOpen className="size-6 text-muted-foreground mb-1" />
-              <p className="text-xs font-medium text-muted-foreground">Projets</p>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="py-0 col-span-2 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-            onClick={openGridEditor}
-          >
-            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
-              <Sun className="size-6 text-muted-foreground mb-1" />
-              <p className="text-xs font-medium text-muted-foreground">Liste routine matinale</p>
-              <p className="text-[10px] text-muted-foreground/60">Vos habitudes quotidiennes</p>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="py-0 col-span-3 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-            onClick={openGridEditor}
-          >
-            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
-              <Target className="size-6 text-muted-foreground mb-1" />
-              <p className="text-xs font-medium text-muted-foreground">Missions du jour</p>
-              <p className="text-[10px] text-muted-foreground/60">Vos objectifs importants</p>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="py-0 col-span-1 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-            onClick={openGridEditor}
-          >
-            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
-              <Dumbbell className="size-6 text-muted-foreground mb-1" />
-              <p className="text-xs font-medium text-muted-foreground">Sport & entraînements</p>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="py-0 col-span-4 border-dashed border-2 bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-            onClick={openGridEditor}
-          >
-            <CardContent className="p-3 h-full flex flex-col items-center justify-center text-center">
-              <Bed className="size-6 text-muted-foreground mb-1" />
-              <p className="text-xs font-medium text-muted-foreground">Sommeil & repos</p>
-            </CardContent>
-          </Card>
+        // Tableau de bord vide : animation et accès direct à la personnalisation
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <Lottie src="/animations/utilisees/Data Dashboard Lottie Animation.json" transform={withoutDashboardBackground} transformKey="no-bg" className="h-56 w-60 max-w-full sm:h-72 sm:w-80" />
+          <p className="font-medium">Ton tableau de bord est vide</p>
+          <p className="mt-1 text-sm text-muted-foreground">Ajoute les widgets qui t'intéressent : routines, objectifs, projets, sommeil…</p>
+          <Button className="mt-4" size="sm" onClick={openGridEditor}>
+            Personnaliser le tableau de bord
+          </Button>
         </div>
       ) : (
-        <div className="grid gap-2 sm:gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 auto-rows-[150px] sm:auto-rows-[200px]" style={{ gridAutoFlow: 'dense' }}>
+        <div className="grid gap-2 sm:gap-4 grid-cols-2 sm:grid-cols-3 @2xl/main:grid-cols-4 auto-rows-[150px] sm:auto-rows-[200px]" style={{ gridAutoFlow: 'dense' }}>
           {enabledWidgets.map((widget) => (
           <div
             key={widget.id}
@@ -1652,9 +1643,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               
               {/* Toggle Desktop/Mobile Layout */}
               <div className="flex items-center gap-4 pt-2 flex-wrap">
-                <label className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
-                  <Checkbox 
-                    checked={separateMobileLayout} 
+                <label data-tour="customize-separate-mobile" className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer">
+                  <Checkbox
+                    checked={separateMobileLayout}
                     onCheckedChange={(checked) => {
                       setSeparateMobileLayout(checked === true)
                       if (!checked) {
@@ -1697,6 +1688,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                   variant={showMobileWidgetPanel ? "default" : "outline"} 
                   size="sm" 
                   className="flex-1"
+                  data-tour="customize-widgets"
                   onClick={() => setShowMobileWidgetPanel(!showMobileWidgetPanel)}
                 >
                   <Plus className="size-4 mr-2" />
@@ -1766,7 +1758,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                   Glissez un widget sur la grille ou sélectionnez des cellules
                 </p>
 
-                <div className="space-y-2">
+                <div data-tour="customize-widgets" className="space-y-2">
                   {Object.entries(
                     Object.entries(WIDGET_LABELS).reduce((acc, [type, config]) => {
                       const category = config.category || "Autre"
@@ -1859,7 +1851,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                   </div>
 
                   {/* Grille dynamique (2x6 mobile ou 4x4 desktop) */}
-                  <div 
+                  <div data-tour="customize-grid" 
                     className={cn(
                       "grid gap-2 p-2 sm:p-3 md:p-4 rounded-xl border-2 transition-all mx-auto",
                       editingMobileLayout ? "grid-cols-2 grid-rows-6" : "grid-cols-4 grid-rows-4",
@@ -2164,7 +2156,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
 
             {/* Footer */}
             <div className="p-2 sm:p-4 border-t bg-muted/30 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 shrink-0">
-              <div className="flex gap-2">
+              <div data-tour="customize-reset-clear" className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -2202,7 +2194,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                 <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={closeGridEditor}>
                   Annuler
                 </Button>
-                <Button size="sm" className="flex-1 sm:flex-none" onClick={applyGridChanges}>
+                <Button data-tour="customize-apply" size="sm" className="flex-1 sm:flex-none" onClick={applyGridChanges}>
                   <CheckCircle2 className="size-3 sm:size-4 mr-1 sm:mr-2" />
                   Appliquer
                 </Button>

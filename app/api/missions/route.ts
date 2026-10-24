@@ -19,7 +19,7 @@ export async function GET() {
     const missions = await prisma.mission.findMany({
       where: { userId: user.id },
       include: {
-        tasks: true,
+        tasks: { where: { deletedAt: null } },
         calendarEvents: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -132,7 +132,7 @@ export async function PUT(request: Request) {
     // Return mission with tasks
     const updatedMission = await prisma.mission.findUnique({
       where: { id },
-      include: { tasks: true, calendarEvents: true },
+      include: { tasks: { where: { deletedAt: null } }, calendarEvents: true },
     })
 
     return NextResponse.json(updatedMission)

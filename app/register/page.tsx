@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -17,10 +17,22 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
+    username: "",
     email: "",
     password: "",
     confirmPassword: "",
+    inviteCode: "",
   })
+  // Réglage du serveur : inscriptions fermées, ou réservées aux personnes qui ont le code d'invitation
+  const [access, setAccess] = useState<{ open: boolean; inviteOnly: boolean }>({ open: true, inviteOnly: false })
+
+  useEffect(() => {
+    fetch("/api/auth/register")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data && setAccess({ open: data.open !== false, inviteOnly: data.inviteOnly === true }))
+      .catch(() => {})
+  }, [])
+  const closed = !access.open
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,8 +55,10 @@ export default function RegisterPage() {
         },
         body: JSON.stringify({
           name: formData.name,
+          username: formData.username,
           email: formData.email,
           password: formData.password,
+          ...(access.inviteOnly ? { inviteCode: formData.inviteCode } : {}),
         }),
       })
 
@@ -77,6 +91,11 @@ export default function RegisterPage() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
+            {closed && (
+              <Alert>
+                <AlertDescription>Les inscriptions sont fermées sur ce serveur.</AlertDescription>
+              </Alert>
+            )}
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
@@ -94,6 +113,7 @@ export default function RegisterPage() {
               <Label htmlFor="name">Nom</Label>
               <Input
                 id="name"
+                autoComplete="name"
                 type="text"
                 placeholder="Votre nom"
                 value={formData.name}
@@ -103,9 +123,26 @@ export default function RegisterPage() {
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="username">Pseudo</Label>
+              <Input
+                id="username"
+                autoComplete="nickname"
+                type="text"
+                placeholder="ton_pseudo"
+                value={formData.username}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/\s/g, "") })}
+                required
+                pattern="[a-z0-9][a-z0-9._]{1,18}[a-z0-9]"
+                title="3 à 20 caractères : lettres minuscules, chiffres, point et tiret bas"
+                disabled={isLoading || success}
+              />
+              <p className="text-xs text-muted-foreground">Unique : tes amis te trouveront avec.</p>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
+                autoComplete="username"
                 type="email"
                 placeholder="exemple@email.com"
                 value={formData.email}
@@ -118,31 +155,48 @@ export default function RegisterPage() {
               <Label htmlFor="password">Mot de passe</Label>
               <Input
                 id="password"
+                autoComplete="new-password"
                 type="password"
                 placeholder="••••••••"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 required
                 disabled={isLoading || success}
-                minLength={6}
+                minLength={8}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
               <Input
                 id="confirmPassword"
+                autoComplete="new-password"
                 type="password"
                 placeholder="••••••••"
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                 required
                 disabled={isLoading || success}
-                minLength={6}
+                minLength={8}
               />
             </div>
+            {access.inviteOnly && (
+              <div className="space-y-2">
+                <Label htmlFor="inviteCode">Code d&apos;invitation</Label>
+                <Input
+                  id="inviteCode"
+                  autoComplete="off"
+                  type="text"
+                  value={formData.inviteCode}
+                  onChange={(e) => setFormData({ ...formData, inviteCode: e.target.value })}
+                  required
+                  disabled={isLoading || success}
+                />
+                <p className="text-xs text-muted-foreground">Demande-le à la personne qui t&apos;a invité.</p>
+              </div>
+            )}
           </CardContent>
           <CardFooter className="flex flex-col space-y-4 pt-6">
-            <Button type="submit" className="w-full" disabled={isLoading || success}>
+            <Button type="submit" className="w-full" disabled={isLoading || success || closed}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               S'inscrire
             </Button>

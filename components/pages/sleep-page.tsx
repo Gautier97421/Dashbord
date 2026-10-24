@@ -5,10 +5,10 @@ import { useApp } from "@/lib/store-api"
 import { generateId, getToday } from "@/lib/helpers"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { useIsMobile } from "@/hooks/use-mobile"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { MonthCalendar, MonthNav, monthLabel, shiftMonth } from "@/components/month-calendar"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Clock, Moon, TrendingUp, Calendar as CalendarIcon, Plus, Trash2 } from "lucide-react"
 import type { SleepLog } from "@/lib/types"
@@ -27,7 +27,6 @@ export function SleepPage() {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [customWakeTimes, setCustomWakeTimes] = useState(["06:00", "07:00", "08:00"])
   const [selectedDate, setSelectedDate] = useState(getToday())
-  const isMobile = useIsMobile()
 
   // Calculer les cycles de sommeil à partir de maintenant
   const calculateSleepCycles = () => {
@@ -63,56 +62,19 @@ export function SleepPage() {
 
   // Obtenir les logs du mois sélectionné pour le calendrier
   const getMonthLogs = () => {
-    const date = new Date(selectedDate)
-    const year = date.getFullYear()
-    const month = date.getMonth()
-    
-    return state.sleepLogs.filter((log) => {
-      const logDate = new Date(log.date)
-      return logDate.getFullYear() === year && logDate.getMonth() === month
-    })
+    // Comparaison sur "AAAA-MM" : new Date("AAAA-MM-JJ") serait lu en UTC
+    const month = selectedDate.slice(0, 7)
+    return state.sleepLogs.filter((log) => log.date.slice(0, 7) === month)
   }
 
-  // Générer les jours du mois pour le calendrier
-  const getCalendarDays = () => {
-    const date = new Date(selectedDate)
-    const year = date.getFullYear()
-    const month = date.getMonth()
-    
-    const firstDay = new Date(year, month, 1)
-    const lastDay = new Date(year, month + 1, 0)
-    const startingDayOfWeek = firstDay.getDay()
-    const daysInMonth = lastDay.getDate()
-    
-    const days = []
-    
-    // Jours du mois précédent
-    for (let i = startingDayOfWeek - 1; i >= 0; i--) {
-      const prevDate = new Date(year, month, -i)
-      days.push({ date: prevDate, isCurrentMonth: false })
-    }
-    
-    // Jours du mois actuel
-    for (let i = 1; i <= daysInMonth; i++) {
-      const currentDate = new Date(year, month, i)
-      days.push({ date: currentDate, isCurrentMonth: true })
-    }
-    
-    return days
-  }
 
-  const calendarDays = getCalendarDays()
   const monthLogs = getMonthLogs()
 
   const getSleepLogForDate = (dateStr: string) => {
     return state.sleepLogs.find((log) => log.date === dateStr)
   }
 
-  const navigateMonth = (direction: number) => {
-    const date = new Date(selectedDate)
-    date.setMonth(date.getMonth() + direction)
-    setSelectedDate(date.toISOString().split("T")[0])
-  }
+
 
   const addSleepLog = async () => {
     if (!newLog.bedTime || !newLog.wakeTime) return
@@ -181,7 +143,7 @@ export function SleepPage() {
       </div>
 
       <Tabs defaultValue="tracking" className="space-y-4 sm:space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList data-tour="sleep-tabs" className="grid w-full grid-cols-3">
           <TabsTrigger value="tracking" className="text-xs sm:text-sm">
             <Moon className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
             Suivi
@@ -280,92 +242,54 @@ export function SleepPage() {
         <TabsContent value="tracking" className="space-y-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
                   <CardTitle>Calendrier de sommeil</CardTitle>
-                  <CardDescription>
-                    {new Date(selectedDate).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}
-                  </CardDescription>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="icon" onClick={() => navigateMonth(-1)}>
-                    ←
-                  </Button>
-                  <Button variant="outline" onClick={() => setSelectedDate(getToday())}>
-                    Aujourd'hui
-                  </Button>
-                  <Button variant="outline" size="icon" onClick={() => navigateMonth(1)}>
-                    →
-                  </Button>
-                </div>
+                <MonthNav
+                  label={monthLabel(selectedDate)}
+                  onPrev={() => setSelectedDate(shiftMonth(selectedDate, -1))}
+                  onNext={() => setSelectedDate(shiftMonth(selectedDate, 1))}
+                  onToday={() => setSelectedDate(getToday())}
+                />
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Calendrier */}
-              <div className="border rounded-lg overflow-hidden">
-                {/* Jours de la semaine */}
-                <div className="grid grid-cols-7 bg-muted">
-                  {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => (
-                    <div key={day} className="p-2 text-center text-sm font-semibold">
-                      {day}
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Grille du calendrier */}
-                <div className="grid grid-cols-7">
-                  {calendarDays.map((day, index) => {
-                    const dateStr = day.date.toISOString().split("T")[0]
-                    const log = getSleepLogForDate(dateStr)
-                    const isToday = dateStr === getToday()
-                    
-                    return (
-                      <div
-                        key={index}
-                        className={`
-                          min-h-24 p-2 border-t border-r relative cursor-pointer hover:bg-accent/50 transition-colors
-                          ${!day.isCurrentMonth ? "bg-muted/30 text-muted-foreground" : ""}
-                          ${isToday ? "bg-primary/5 ring-2 ring-primary ring-inset" : ""}
-                          ${log ? "bg-blue-50 dark:bg-blue-950/20" : ""}
-                        `}
-                        onClick={() => {
-                          setNewLog({
-                            ...newLog,
-                            date: dateStr,
-                          })
-                          setShowAddForm(true)
-                        }}
-                      >
-                        <div className="text-sm font-semibold mb-1">
-                          {day.date.getDate()}
-                        </div>
-                        {log && (
-                          <div className="space-y-1">
-                            <div className="text-[0.625rem] sm:text-xs text-center bg-blue-500/10 text-blue-600 dark:text-blue-400 px-0 py0.5 rounded">
-                              {log.bedTime} → {log.wakeTime}
-                            </div>
-                            <div className="text-xs font-semibold">
-                              {Math.floor(log.duration / 60)}h{log.duration % 60 > 0 ? `${log.duration % 60}` : ""}
-                            </div>
-                            {!isMobile && (
-                              <div className="flex gap-0.5">
-                                {Array.from({ length: 5 }).map((_, i) => (
-                                  <span
-                                    key={i}
-                                    className={`text-xs ${i < log.quality ? "text-yellow-500" : "text-gray-300"}`}
-                                  >
-                                    ★
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
+              <MonthCalendar
+                day={selectedDate}
+                dayClassName={(day) => !!getSleepLogForDate(day.key) && "bg-blue-50 dark:bg-blue-950/20"}
+                onDayClick={(day) => {
+                  setNewLog({
+                    ...newLog,
+                    date: day.key,
+                  })
+                  setShowAddForm(true)
+                }}
+                renderDay={(day) => {
+                  const log = getSleepLogForDate(day.key)
+                  if (!log) return null
+                  return (
+                    <div className="min-w-0 space-y-1">
+                      <div className="truncate rounded bg-blue-500/10 px-0.5 py-0.5 text-center text-[0.625rem] text-blue-600 dark:text-blue-400 sm:text-xs">
+                        {log.bedTime} → {log.wakeTime}
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
+                      <div className="text-xs font-semibold">
+                        {Math.floor(log.duration / 60)}h{log.duration % 60 > 0 ? `${log.duration % 60}` : ""}
+                      </div>
+                      <div className="hidden gap-0.5 @min-[5.5rem]:flex">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <span
+                            key={i}
+                            className={`text-xs ${i < log.quality ? "text-yellow-500" : "text-muted-foreground/40"}`}
+                          >
+                            ★
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                }}
+              />
 
               {/* Dialog pour ajout/édition */}
               <Dialog open={showAddForm} onOpenChange={setShowAddForm}>

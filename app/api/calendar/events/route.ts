@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { ownRef } from '@/lib/projects/server'
 
 // GET all calendar events
 export async function GET() {
@@ -54,8 +55,8 @@ export async function POST(request: Request) {
         priority: priority || 'medium',
         isRecurring: isRecurring || false,
         recurrencePattern,
-        missionId,
-        projectId,
+        missionId: await ownRef('mission', missionId, user.id),
+        projectId: await ownRef('project', projectId, user.id),
         completed: completed || false,
       },
     })
@@ -102,8 +103,8 @@ export async function PUT(request: Request) {
         priority,
         isRecurring,
         recurrencePattern,
-        missionId,
-        projectId,
+        missionId: await ownRef('mission', missionId, user.id),
+        projectId: await ownRef('project', projectId, user.id),
         completed,
       },
     })

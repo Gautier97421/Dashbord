@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
   Plus,
-  MoreHorizontal,
   CheckCircle2,
   Circle,
   Clock,
@@ -40,6 +39,7 @@ import { useApp } from "@/lib/store-api"
 import { generateId, formatDateFr } from "@/lib/helpers"
 import type { Mission, Task, TimeFrame, Priority, TaskStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { MoreDots } from "@/components/lottie"
 
 const TIME_FRAMES: { value: TimeFrame; label: string }[] = [
   { value: "day", label: "Jour" },
@@ -56,7 +56,7 @@ const PRIORITIES: { value: Priority; label: string; color: string }[] = [
 
 const STATUSES: { value: TaskStatus; label: string }[] = [
   { value: "todo", label: "À faire" },
-  { value: "in-progress", label: "En cours" },
+  { value: "in_progress", label: "En cours" },
   { value: "done", label: "Terminé" },
 ]
 
@@ -190,7 +190,7 @@ export function MissionsPage() {
     switch (status) {
       case "done":
         return <CheckCircle2 className="size-5 text-success" />
-      case "in-progress":
+      case "in_progress":
         return <Clock className="size-5 text-primary" />
       default:
         return <Circle className="size-5 text-muted-foreground" />
@@ -293,8 +293,8 @@ export function MissionsPage() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="shrink-0">
-                <MoreHorizontal className="size-4" />
+              <Button variant="ghost" size="icon" className="shrink-0 hover:bg-transparent hover:text-foreground dark:hover:bg-transparent">
+                <MoreDots />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -302,7 +302,7 @@ export function MissionsPage() {
                 <Circle className="size-4 mr-2" />
                 À faire
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => updateMissionStatus(mission, "in-progress")}>
+              <DropdownMenuItem onClick={() => updateMissionStatus(mission, "in_progress")}>
                 <Clock className="size-4 mr-2" />
                 En cours
               </DropdownMenuItem>
@@ -333,7 +333,7 @@ export function MissionsPage() {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Missions</h1>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Objectif</h1>
           <p className="text-sm text-muted-foreground">Organisez vos objectifs par période</p>
         </div>
 
@@ -343,17 +343,17 @@ export function MissionsPage() {
           setIsDialogOpen(open)
         }}>
           <DialogTrigger asChild>
-            <Button size="sm" className="sm:size-default w-full sm:w-auto">
+            <Button data-tour="missions-add" size="sm" className="sm:size-default w-full sm:w-auto">
               <Plus className="size-4 mr-2" />
-              Nouvelle mission
+              Nouvel objectif
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-[90vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{editingMission ? "Modifier la mission" : "Nouvelle mission"}</DialogTitle>
+              <DialogTitle>{editingMission ? "Modifier l'objectif" : "Nouvel objectif"}</DialogTitle>
               <DialogDescription>
                 {editingMission
-                  ? "Modifiez les détails de cette mission"
+                  ? "Modifiez les détails de cet objectif"
                   : "Définissez un objectif clair et atteignable"}
               </DialogDescription>
             </DialogHeader>
@@ -486,7 +486,7 @@ export function MissionsPage() {
 
       {/* Missions by Time Frame */}
       <Tabs value={activeTimeFrame} onValueChange={(v) => setActiveTimeFrame(v as TimeFrame)}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList data-tour="missions-tabs" className="grid w-full grid-cols-4">
           {TIME_FRAMES.map((tf) => (
             <TabsTrigger key={tf.value} value={tf.value} className="relative">
               {tf.label}
@@ -501,7 +501,7 @@ export function MissionsPage() {
 
         {TIME_FRAMES.map((tf) => (
           <TabsContent key={tf.value} value={tf.value} className="mt-6">
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 @4xl/main:grid-cols-3">
               {/* To Do Column */}
               <div className="space-y-4">
                 <h3 className="font-semibold flex items-center gap-2 text-sm sm:text-base">
@@ -522,11 +522,11 @@ export function MissionsPage() {
                   <Clock className="size-4 text-primary" />
                   En cours
                   <Badge variant="secondary">
-                    {missionsByTimeFrame[tf.value].filter((m) => m.status === "in-progress").length}
+                    {missionsByTimeFrame[tf.value].filter((m) => m.status === "in_progress").length}
                   </Badge>
                 </h3>
                 {missionsByTimeFrame[tf.value]
-                  .filter((m) => m.status === "in-progress")
+                  .filter((m) => m.status === "in_progress")
                   .map(renderMissionCard)}
               </div>
 
@@ -554,7 +554,7 @@ export function MissionsPage() {
                       }}>
                   <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                     <Target className="size-8 text-muted-foreground mb-2" />
-                    <p className="text-sm font-medium text-muted-foreground">Mission principale</p>
+                    <p className="text-sm font-medium text-muted-foreground">Objectif principal</p>
                     <p className="text-xs text-muted-foreground mt-1">Objectif important</p>
                     <Button className="mt-4" size="sm">
                       <Plus className="size-4 mr-2" />

@@ -7,7 +7,9 @@ function Card({ className, ...props }: React.ComponentProps<'div'>) {
     <div
       data-slot="card"
       className={cn(
-        'bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm',
+        // min-w-0 : dans une grille ou une ligne flex, la carte suit la largeur de sa colonne au lieu de
+        // s'élargir à son contenu (ce qui faisait défiler toute la page de côté sur téléphone)
+        'bg-card text-card-foreground flex min-w-0 flex-col gap-6 rounded-xl border py-6 shadow-sm',
         className,
       )}
       {...props}

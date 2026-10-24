@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2 } from "lucide-react"
+import { Lottie } from "@/components/lottie"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -50,6 +51,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
+          <Lottie src="/animations/utilisees/ballon volant.json" adaptive="ink" className="mx-auto -mb-2 size-36 text-foreground" />
           <CardTitle className="text-2xl font-bold text-center">Connexion</CardTitle>
           <CardDescription className="text-center">
             Entrez vos identifiants pour accéder à votre dashboard
@@ -66,6 +68,7 @@ export default function LoginPage() {
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
+                autoComplete="username"
                 type="email"
                 placeholder="exemple@email.com"
                 value={formData.email}
@@ -78,6 +81,7 @@ export default function LoginPage() {
               <Label htmlFor="password">Mot de passe</Label>
               <Input
                 id="password"
+                autoComplete="current-password"
                 type="password"
                 placeholder="••••••••"
                 value={formData.password}

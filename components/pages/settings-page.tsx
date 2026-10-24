@@ -31,13 +31,22 @@ import {
   Loader2,
 } from "lucide-react"
 import { useApp } from "@/lib/store-api"
+import { CustomPagesManager } from "@/components/settings/custom-pages-manager"
+import { MenuOrderManager } from "@/components/settings/menu-order-manager"
+import { FolderHandlerSetup } from "@/components/settings/folder-handler-setup"
+import { ConnectionsManager } from "@/components/settings/connections-manager"
+import { InstallAppCard } from "@/components/settings/install-app-card"
+import { NotificationsCard } from "@/components/settings/notifications-card"
+import { AdminFeaturesCard } from "@/components/settings/admin-features-card"
+import { ProfileCard } from "@/components/settings/profile-card"
+import type { PageKey } from "@/components/app-sidebar"
 
 const HOURS = Array.from({ length: 24 }, (_, i) => ({
   value: i.toString(),
   label: `${i.toString().padStart(2, "0")}:00`,
 }))
 
-export function SettingsPage() {
+export function SettingsPage({ onNavigate }: { onNavigate?: (page: PageKey) => void }) {
   const { state, updateSettings } = useApp()
   const { toast } = useToast()
   const [isResetting, setIsResetting] = useState(false)
@@ -78,11 +87,65 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl" style={{ fontFamily: 'cursive' }}>
+    <div className="space-y-6" style={{ fontFamily: 'cursive' }}>
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Paramètres</h1>
         <p className="text-muted-foreground">Personnalisez votre expérience</p>
       </div>
+
+      {/* Masonry: each card keeps its own height instead of stretching to its row */}
+      <div className="columns-1 @4xl/main:columns-2 gap-6 [&>*]:mb-6 [&>*]:break-inside-avoid">
+      <ProfileCard />
+
+      {/* Administration (visible uniquement pour l'admin) */}
+      <AdminFeaturesCard />
+
+      {/* Tutoriel */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Tutoriel</CardTitle>
+          <CardDescription>Revois la visite guidée de l'app, outil par outil.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            data-tour="settings-tour"
+            variant="outline"
+            onClick={() => window.dispatchEvent(new Event("dashlife:start-tour"))}
+          >
+            <RefreshCw className="size-4 mr-2" />
+            Revoir le tutoriel
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Installation PWA */}
+      <div data-tour="settings-install">
+        <InstallAppCard />
+      </div>
+
+      {/* Notifications push et alertes des projets */}
+      <NotificationsCard />
+
+      {/* Connexions / applications */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Connexions</CardTitle>
+          <CardDescription>Connecte tes applications (Gmail, GitHub, Notion…) à utiliser dans l'Agent IA</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ConnectionsManager />
+        </CardContent>
+      </Card>
+
+      {/* Custom pages */}
+      <CustomPagesManager onNavigate={onNavigate} />
+
+      {/* Menu order */}
+      <div data-tour="settings-menu-order">
+        <MenuOrderManager />
+      </div>
+
+      <FolderHandlerSetup />
 
       {/* Data Management */}
       <Card>
@@ -153,6 +216,7 @@ export function SettingsPage() {
           </p>
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }

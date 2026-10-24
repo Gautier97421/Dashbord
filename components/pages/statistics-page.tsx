@@ -28,7 +28,6 @@ import {
   TrendingDown,
   Target,
   CheckCircle2,
-  Flame,
   Calendar,
   Award,
   AlertTriangle,
@@ -36,6 +35,7 @@ import {
 import { useApp } from "@/lib/store-api"
 import { getToday, calculateStreak } from "@/lib/helpers"
 import { cn } from "@/lib/utils"
+import { StreakFlame } from "@/components/lottie"
 
 export function StatisticsPage() {
   const { state } = useApp()
@@ -100,7 +100,7 @@ export function StatisticsPage() {
   const missionStats = useMemo(() => {
     const total = state.missions.length
     const completed = state.missions.filter((m) => m.status === "done").length
-    const inProgress = state.missions.filter((m) => m.status === "in-progress").length
+    const inProgress = state.missions.filter((m) => m.status === "in_progress").length
     const todo = state.missions.filter((m) => m.status === "todo").length
 
     const byTimeFrame = {
@@ -202,27 +202,27 @@ export function StatisticsPage() {
   const chartConfig = {
     rate: {
       label: "Taux",
-      color: "hsl(var(--primary))",
+      color: "var(--primary)",
     },
     completed: {
       label: "Complétées",
-      color: "hsl(var(--success))",
+      color: "var(--success)",
     },
     count: {
       label: "Actions",
-      color: "hsl(var(--chart-1))",
+      color: "var(--chart-1)",
     },
   }
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div>
+      <div data-tour="statistics-header">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Statistiques</h1>
         <p className="text-sm text-muted-foreground">Analysez vos performances et identifiez vos points forts</p>
       </div>
 
       {/* Overview Cards */}
-      <div className="grid gap-2 sm:gap-4 grid-cols-2 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:gap-4 grid-cols-2 @2xl/main:grid-cols-2 @4xl/main:grid-cols-4">
         <Card>
           <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
@@ -250,7 +250,7 @@ export function StatisticsPage() {
           <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs sm:text-sm text-muted-foreground">Missions complétées</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Objectifs atteints</p>
                 <p className="text-xl sm:text-2xl font-bold">{missionStats.completed}/{missionStats.total}</p>
               </div>
               <div className="rounded-full bg-primary/10 p-1.5 sm:p-2">
@@ -287,8 +287,8 @@ export function StatisticsPage() {
                   {routineInsights.bestStreak?.streak.current || 0}j
                 </p>
               </div>
-              <div className="rounded-full bg-orange-500/10 p-1.5 sm:p-2">
-                <Flame className="size-4 sm:size-5 text-orange-500" />
+              <div>
+                <StreakFlame className="size-7 sm:size-8" />
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-2 truncate">
@@ -298,7 +298,7 @@ export function StatisticsPage() {
         </Card>
       </div>
 
-      <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 @4xl/main:grid-cols-2">
         {/* Routine Completion Chart */}
         <Card>
           <CardHeader>
@@ -311,22 +311,26 @@ export function StatisticsPage() {
           <CardContent>
             <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] w-full">
               <AreaChart
-                data={routineStats.dailyCompletion.slice(-14)}
-                margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                data={routineStats.dailyCompletion}
+                margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
               >
                 <defs>
                   <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
+                {/* Sur téléphone, une date sur deux ou trois : les étiquettes ne se chevauchent pas */}
                 <XAxis
                   dataKey="shortDate"
                   tickLine={false}
                   axisLine={false}
                   fontSize={12}
+                  interval="preserveStartEnd"
+                  minTickGap={16}
                 />
                 <YAxis
+                  width={40}
                   tickLine={false}
                   axisLine={false}
                   fontSize={12}
@@ -337,7 +341,7 @@ export function StatisticsPage() {
                 <Area
                   type="monotone"
                   dataKey="rate"
-                  stroke="hsl(var(--primary))"
+                  stroke="var(--primary)"
                   fillOpacity={1}
                   fill="url(#colorRate)"
                   name="Taux"
@@ -362,11 +366,11 @@ export function StatisticsPage() {
                   axisLine={false}
                   fontSize={12}
                 />
-                <YAxis tickLine={false} axisLine={false} fontSize={12} />
+                <YAxis width={32} tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Bar
                   dataKey="count"
-                  fill="hsl(var(--chart-1))"
+                  fill="var(--chart-1)"
                   radius={[4, 4, 0, 0]}
                   name="Actions"
                 />
@@ -378,7 +382,7 @@ export function StatisticsPage() {
         {/* Mission Status Distribution */}
         <Card>
           <CardHeader>
-            <CardTitle>Répartition des missions</CardTitle>
+            <CardTitle>Répartition des objectifs</CardTitle>
             <CardDescription>Par statut et période</CardDescription>
           </CardHeader>
           <CardContent>
@@ -498,7 +502,7 @@ export function StatisticsPage() {
                         </Badge>
                         {habit.streak.current > 0 && (
                           <div className="flex items-center gap-1 text-orange-500">
-                            <Flame className="size-3" />
+                            <StreakFlame className="size-4" />
                             <span className="text-xs">{habit.streak.current}j</span>
                           </div>
                         )}

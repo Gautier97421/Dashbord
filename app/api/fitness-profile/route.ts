@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { age, weight, height, gender, goal, activityLevel, targetWeight } = body
+    const { age, weight, height, gender, goal, activityLevel, targetWeight, customCalories, customProtein, customCarbs, customFats } = body
 
     const profile = await prisma.fitnessProfile.upsert({
       where: { userId: user.id },
@@ -53,6 +53,10 @@ export async function POST(request: Request) {
         goal,
         activityLevel,
         targetWeight,
+        customCalories,
+        customProtein,
+        customCarbs,
+        customFats,
       },
       create: {
         userId: user.id,
@@ -63,6 +67,10 @@ export async function POST(request: Request) {
         goal,
         activityLevel,
         targetWeight,
+        customCalories,
+        customProtein,
+        customCarbs,
+        customFats,
       },
     })
 
@@ -87,7 +95,7 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json()
-    const { age, weight, height, gender, goal, activityLevel, targetWeight } = body
+    const { age, weight, height, gender, goal, activityLevel, targetWeight, customCalories, customProtein, customCarbs, customFats } = body
 
     const profile = await prisma.fitnessProfile.update({
       where: { userId: user.id },
@@ -99,6 +107,10 @@ export async function PUT(request: Request) {
         goal,
         activityLevel,
         targetWeight,
+        customCalories,
+        customProtein,
+        customCarbs,
+        customFats,
       },
     })
 

@@ -8,8 +8,9 @@ services:
       POSTGRES_USER: dashboard_user
       POSTGRES_PASSWORD: dashboard_secret_2026
       POSTGRES_DB: dashboard_db
+    # 127.0.0.1 : joignable depuis ce PC seulement, pas depuis les autres appareils du réseau
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -26,11 +27,29 @@ services:
     container_name: dashboard_app
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3003:3000"
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql://dashboard_user:dashboard_secret_2026@postgres:5432/dashboard_db
-      - NEXTAUTH_URL=http://localhost:3000
-      - NEXTAUTH_SECRET=your-secret-key-change-in-production-12345
+      # Doit correspondre au port publié ci-dessus : toutes les URLs de retour OAuth en dérivent
+      - NEXTAUTH_URL=http://localhost:3003
+      # Vides => dérivées de NEXTAUTH_URL (les valeurs du .env pointent sur le port 3000 du mode dev)
+      - GMAIL_REDIRECT_URI=
+      - SPOTIFY_REDIRECT_URI=
+      - LINKEDIN_REDIRECT_URI=
+      # Ollama tourne sur la machine hôte, pas dans le conteneur
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      # Local : l'IA tourne sur le PC (Ollama), même si une clé Claude est présente dans .env
+      - AI_PROVIDER=ollama
+      # Local uniquement : autorise les changements de schéma destructifs au démarrage
+      - PRISMA_ACCEPT_DATA_LOSS=true
+      - NODE_ENV=production
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Fichiers joints aux projets et tâches : gardés d'une reconstruction de l'image à l'autre
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -42,8 +61,9 @@ services:
     container_name: dashboard_prisma_studio
     restart: unless-stopped
     working_dir: /app
+    # Prisma Studio n'a pas de mot de passe : ce PC seulement
     ports:
-      - "5555:5555"
+      - "127.0.0.1:5555:5555"
     environment:
       - DATABASE_URL=postgresql://dashboard_user:dashboard_secret_2026@postgres:5432/dashboard_db
     volumes:
@@ -54,9 +74,10 @@ services:
       postgres:
         condition: service_healthy
     command: >
-      sh -c "npm install -g pnpm &&
+      sh -c "npm install -g pnpm@10.19.0 &&
              pnpm install --frozen-lockfile &&
              npx prisma studio --hostname 0.0.0.0"
 
 volumes:
   postgres_data:
+  uploads_data:

@@ -1,5 +1,6 @@
-export type Priority = "low" | "medium" | "high"
-export type TaskStatus = "todo" | "in-progress" | "done"
+export type Priority = "low" | "medium" | "high" | "urgent"
+export type TaskStatus = "todo" | "in_progress" | "waiting" | "done"
+export type Recurrence = "daily" | "weekly" | "monthly"
 export type TimeFrame = "day" | "week" | "month" | "year"
 export type RoutineCategory = "health" | "sport" | "mental" | "work" | "personal"
 export type ActivityType = "gym" | "running" | "climbing" | "other"
@@ -70,6 +71,26 @@ export interface Task {
   projectId?: string
   createdAt: string
   completedAt?: string
+  updatedAt?: string
+  startDate?: string
+  notes?: string
+  // Sous-tâches / checklist
+  checklist?: ChecklistItem[]
+  links?: ProjectLink[]
+  // Tâches à terminer avant celle-ci
+  dependsOn?: string[]
+  // Terminer une tâche récurrente recrée la suivante
+  recurrence?: Recurrence | null
+  // Position dans sa colonne Kanban et dans la liste du projet
+  order?: number
+  // Affichée aussi dans le calendrier principal, à son échéance
+  showInCalendar?: boolean
+}
+
+export interface ChecklistItem {
+  id: string
+  text: string
+  done: boolean
 }
 
 export interface Mission {
@@ -94,6 +115,32 @@ export interface Project {
   deadline?: string
   createdAt: string
   completedAt?: string
+  // État choisi à la main (pas commencé, en cours, fini) ; absent ou null = aucun état affiché
+  status?: ProjectStatus | null
+  // Projet parent (absent ou null = projet racine)
+  parentId?: string | null
+  // Liens utiles : dossier local, app en ligne, documentation, dépôt…
+  links?: ProjectLink[]
+  updatedAt?: string
+  notes?: string
+  priority?: Priority | null
+  startDate?: string
+  // Catégorie libre (Perso, Travail, Client…)
+  category?: string
+  favorite?: boolean
+  // Position parmi les projets du même parent
+  order?: number
+  // Échéance affichée aussi dans le calendrier principal
+  showInCalendar?: boolean
+}
+
+export type ProjectStatus = "not_started" | "in_progress" | "done"
+
+export interface ProjectLink {
+  id: string
+  label: string
+  // URL web (https://…) ou chemin local (C:\…, \\serveur\…, /home/…)
+  url: string
 }
 
 export interface CalendarEvent {
@@ -193,6 +240,10 @@ export interface FitnessProfile {
   goal: FitnessGoal
   activityLevel: "sedentary" | "light" | "moderate" | "active" | "very_active"
   targetWeight?: number
+  customCalories?: number | null
+  customProtein?: number | null
+  customCarbs?: number | null
+  customFats?: number | null
 }
 
 export interface DailyNutrition {
@@ -213,6 +264,7 @@ export interface Meal {
   protein: number
   carbs: number
   fats: number
+  recipeId?: string | null
 }
 
 export interface MealPreset {
@@ -223,6 +275,30 @@ export interface MealPreset {
   protein: number
   carbs: number
   fats: number
+}
+
+export interface RecipeIngredient {
+  name: string
+  quantity: string
+  unit: string
+}
+
+export interface Recipe {
+  id: string
+  name: string
+  description?: string
+  ingredients: RecipeIngredient[]
+  protein?: number
+  carbs?: number
+  fat?: number
+  calories?: number
+  prepTime?: number
+  cookTime?: number
+  servings?: number
+  category?: string
+  imageUrl?: string
+  createdAt: string
+  updatedAt: string
 }
 
 // Night Routine
@@ -267,6 +343,7 @@ export interface AppState {
   dailyNutrition: DailyNutrition[]
   dashboardWidgets: DashboardWidget[]
   notes: Note[]
+  recipes: Recipe[]
   settings: UserSettings
 }
 
@@ -291,6 +368,9 @@ export type AppAction =
   | { type: "ADD_PROJECT"; payload: Project }
   | { type: "UPDATE_PROJECT"; payload: Project }
   | { type: "DELETE_PROJECT"; payload: string }
+  // Modifications partielles groupées (glisser-déposer : positions de plusieurs éléments)
+  | { type: "PATCH_TASKS"; payload: { id: string; changes: Partial<Task> }[] }
+  | { type: "PATCH_PROJECTS"; payload: { id: string; changes: Partial<Project> }[] }
   | { type: "ADD_EVENT"; payload: CalendarEvent }
   | { type: "UPDATE_EVENT"; payload: CalendarEvent }
   | { type: "DELETE_EVENT"; payload: string }

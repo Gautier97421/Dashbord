@@ -21,7 +21,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Plus,
-  Flame,
   Trophy,
   Calendar,
   Trash2,
@@ -35,6 +34,7 @@ import { useApp } from "@/lib/store-api"
 import { generateId, getToday, formatDateFr, calculateStreak } from "@/lib/helpers"
 import type { NightRoutineAction, Priority } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { StreakFlame } from "@/components/lottie"
 
 const PRIORITIES: { value: Priority; label: string }[] = [
   { value: "low", label: "Basse" },
@@ -188,7 +188,7 @@ export function RoutineNightPage() {
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="sm:size-default w-full sm:w-auto" onClick={() => { setEditingAction(null); setNewAction({ name: "", importance: "medium" }) }}>
+            <Button data-tour="routine-night-add" size="sm" className="sm:size-default w-full sm:w-auto" onClick={() => { setEditingAction(null); setNewAction({ name: "", importance: "medium" }) }}>
               <Plus className="size-4 mr-2" />
               Ajouter une action
             </Button>
@@ -285,7 +285,7 @@ export function RoutineNightPage() {
               </Card>
             </div>
           ) : (
-            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 @4xl/main:grid-cols-3">
             {(state.nightRoutineActions || []).map((action) => {
               const log = todayLogs.find((l) => l.actionId === action.id)
               const isCompleted = log?.completed || false
@@ -326,7 +326,7 @@ export function RoutineNightPage() {
                         </Badge>
                         {streak.current > 0 && (
                           <div className="flex items-center gap-1 text-orange-500">
-                            <Flame className="size-3" />
+                            <StreakFlame variant="blue" className="size-4" />
                             <span className="text-xs font-medium">{streak.current}j</span>
                           </div>
                         )}
@@ -480,7 +480,7 @@ export function RoutineNightPage() {
               <CardDescription>Vue d&apos;ensemble de votre progression</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 @4xl/main:grid-cols-4">
                 <div className="rounded-lg border p-4 text-center">
                   <p className="text-3xl font-bold text-primary">
                     {state.nightRoutineLogs.filter((l) => l.completed).length}
